@@ -380,15 +380,23 @@ def _compute_from_alarms(alarms: list, date_from: str, date_to: str, cases: list
 # ── API live ──────────────────────────────────────────────────────────────────
 def compute_metrics(date_from: str, date_to: str) -> dict:
     """Calcule les métriques en appelant l'API LogRhythm."""
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        fut_alarms = pool.submit(fetch_alarms, date_from, date_to)
-        fut_cases = pool.submit(fetch_cases, date_from, date_to)
-        alarms = fut_alarms.result()
-        cases = fut_cases.result()
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            fut_alarms = pool.submit(fetch_alarms, date_from, date_to)
+            fut_cases = pool.submit(fetch_cases, date_from, date_to)
+            alarms = fut_alarms.result()
+            cases = fut_cases.result()
+    except Exception as exc:
+        result = _compute_from_alarms([], date_from, date_to, [])
+        result["last_updated"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        result["api_error"] = True
+        result["api_error_message"] = str(exc)
+        return result
     if MONITORED_ENTITIES:
         alarms = [a for a in alarms if a.get("entityName") in MONITORED_ENTITIES]
     result = _compute_from_alarms(alarms, date_from, date_to, cases)
     result["last_updated"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    result["api_error"] = False
     return result
 
 # ── Mode local (fichier JSON exporté) ────────────────────────────────────────

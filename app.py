@@ -92,7 +92,8 @@ def _compute(date_from: str, date_to: str, force: bool = False) -> dict:
     if not force and key in _cache and (now - _cache[key]["ts"]) < CACHE_TTL:
         return _cache[key]["data"]
     data = logrhythm.compute_metrics(date_from, date_to)
-    _cache[key] = {"data": data, "ts": now}
+    if not data.get("api_error"):
+        _cache[key] = {"data": data, "ts": now}
     return data
 
 def _range_from_days(days: int):

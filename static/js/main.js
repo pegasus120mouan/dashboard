@@ -222,13 +222,19 @@ function renderKPIs(data) {
 
   // Bannière — alertes backlog non traitées
   const banner = document.getElementById('criticalBanner');
-  if (critBack > 0 || highBack > 0) {
+  const bannerText = document.getElementById('criticalBannerText');
+  if (data.api_error) {
+    if (bannerText) {
+      bannerText.textContent = data.api_error_message
+        || "API LogRhythm injoignable depuis ce serveur. Vérifiez LR_BASE_URL (HTTPS) et le réseau.";
+    }
+    banner.style.display = 'flex';
+  } else if (critBack > 0 || highBack > 0) {
     const parts = [];
     if (critBack > 0) parts.push(`${fmtNum(critBack)} critique(s) RR9`);
     if (highBack > 0) parts.push(`${fmtNum(highBack)} élevée(s) RR8`);
-    /*document.getElementById('criticalBannerText').textContent =
-      `ATTENTION : ${parts.join(' • ')} non traitée(s) en backlog`;
-    banner.style.display = 'flex';*/
+    if (bannerText) bannerText.textContent = `ATTENTION : ${parts.join(' • ')} non traitée(s) en backlog`;
+    banner.style.display = 'flex';
   } else {
     banner.style.display = 'none';
   }

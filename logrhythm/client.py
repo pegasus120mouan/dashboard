@@ -3,6 +3,7 @@ Appels API LogRhythm de haut niveau.
 fetch_alarms, fetch_drilldown, fetch_cases.
 """
 
+import os
 import time
 from .auth import _get
 
@@ -28,12 +29,15 @@ def fetch_alarms(date_from: str, date_to: str, limit: int  | None = None) -> lis
                 "offset":             offset,
                 "orderby":            "DateInserted",
                 "dir":                "descending",
-                # "entityName":         "Primary Site", # filtrage par entité.
-                "dateInserted":       date_from,   # borne début (si supporté par l'API)
-                "dateInserted_end":   date_to,     # borne fin   (si supporté par l'API)
+                "dateInserted":       date_from,
+                "dateInserted_end":   date_to,
             },
         )
         if not data:
+            if offset == 0:
+                raise ConnectionError(
+                    f"API LogRhythm injoignable ({os.getenv('LR_BASE_URL', '')})"
+                )
             break
 
         raw = data.get("alarmsSearchDetails", [])
