@@ -249,21 +249,12 @@ def api_full_forensic():
         data = _compute(*_range_from_days(nb_days))
     
     full_list = data.get("alarm_list", [])
-    relevant_alarms = [a for a in full_list if a.get('isIntrusion') or a.get('severityLabel') in ['critical', 'high']]
+    relevant_alarms = [
+        a for a in full_list
+        if a.get("isIntrusion") or a.get("severityLabel") in ["critical", "high"]
+    ][:40]
     enriched_data = get_full_forensic_data(relevant_alarms)
-    
-    # --- TEST DE DIAGNOSTIC ---
-    raw_hosts = [item.get("impacted") for item in enriched_data if item.get("impacted") not in ["N/A", "", None]]
-    from collections import Counter
-    print("\n" + "="*50)
-    print("📊 [DIAGNOSTIC BACKEND - HOSTS IMPACTÉS]")
-    print(f"1. Nombre d'éléments enrichis retenus : {len(enriched_data)}")
-    print(f"2. Nombre d'hôtes valides (non N/A) : {len(raw_hosts)}")
-    print(f"3. TOP 10 BRUT CALCULÉ PAR PYTHON :")
-    for host, count in Counter(raw_hosts).most_common(10):
-        print(f"   • {host} : {count}")
-    print("="*50 + "\n")
-    
+
     return jsonify({
         "base_stats": data,
         "forensic_details": enriched_data

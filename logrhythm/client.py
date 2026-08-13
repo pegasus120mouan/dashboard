@@ -77,7 +77,7 @@ def fetch_drilldown(alarm_id: int) -> dict:
     Appelle /lr-alarm-api/alarms/{alarmId}/events et extrait
     les hôtes, IPs et utilisateurs impliqués dans l'alarme.
     """
-    data = _get(f"/lr-alarm-api/alarms/{alarm_id}/events")
+    data = _get(f"/lr-alarm-api/alarms/{alarm_id}/events", timeout=8)
     if not data:
         return {}
 
@@ -200,12 +200,8 @@ def get_full_forensic_data(alarm_list):
 
         # --- STRATÉGIE CACHE ---
         if alarm_id in FORENSIC_CACHE:
-            # On a déjà les infos en RAM ! On les renvoie direct
-            print(f"⚡ [CACHE HIT] Alarme {alarm_id} récupérée en RAM")
             return FORENSIC_CACHE[alarm_id]
 
-        print(f"🔍 [CACHE MISS] Alarme {alarm_id} -> Appel API LogRhythm...")
-        # --- SI PAS EN CACHE, ON PASSE A L'API ---
         try:
             # Ton code de drilldown existant
             details = fetch_drilldown(alarm_id) 
@@ -216,8 +212,7 @@ def get_full_forensic_data(alarm_list):
             # --- SÉCURITÉ ICI ---
             events_list = details.get("alarmEventsDetails", [])
             if not events_list:
-                print(f"⚠️ Pas d'événements pour l'alarme {alarm_id} (Liste vide)")
-                return None  # On ignore cette alarme proprement
+                return None
             
             event = events_list[0]
             # --------------------
@@ -271,11 +266,7 @@ def get_full_forensic_data(alarm_list):
 
     # --- PARTIE MANQUANTE QUI CAUSAIT LE 'NULL' ---
     # On exécute process_alarm pour chaque alarme de la liste en parallèle
-    with ThreadPoolExecutor(max_workers=20) as executor:
+    with ThreadPoolExecutor(max_workers=12) as executor:
         results = list(executor.map(process_alarm, alarm_list))
     
-    # On retourne la liste finale en enlevant les erreurs (None)
-    final_data = [r for r in results if r is not None]
-    
-    print(f"DEBUG: {len(final_data)} alarmes analysées avec succès.")
-    return final_data
+    return [r for r in results if r is not None]

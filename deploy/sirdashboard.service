@@ -1,15 +1,15 @@
 [Unit]
 Description=SirDashboard SOC (Gunicorn)
-After=network.target mariadb.service
+After=network.target mariadb.service mysql.service
 Wants=mariadb.service
 
 [Service]
 Type=simple
 User=www-data
 Group=www-data
-WorkingDirectory=/opt/sirdashboard
-Environment="PATH=/opt/sirdashboard/venv/bin"
-ExecStart=/opt/sirdashboard/venv/bin/gunicorn --config gunicorn.conf.py wsgi:app
+WorkingDirectory=/var/www/html/dashboard
+Environment="PATH=/var/www/html/dashboard/venv/bin"
+ExecStart=/var/www/html/dashboard/venv/bin/gunicorn --config gunicorn.conf.py --bind 127.0.0.1:8010 wsgi:app
 ExecReload=/bin/kill -s HUP $MAINPID
 Restart=always
 RestartSec=5

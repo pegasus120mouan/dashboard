@@ -55,7 +55,7 @@ def _get_token() -> str:
 def _headers() -> dict:
     return {"accept": "application/json", "authorization": f"Bearer {_get_token()}"}
 
-def _get(path: str, params: dict = None):
+def _get(path: str, params: dict = None, timeout: int = 15):
     """Effectue un GET authentifié sur l'API LogRhythm. Retourne le JSON ou None."""
     try:
         resp = requests.get(
@@ -63,7 +63,7 @@ def _get(path: str, params: dict = None):
             params=params,
             headers=_headers(),
             verify=False,
-            timeout=15,
+            timeout=timeout,
         )
         return resp.json() if resp.status_code == 200 else None
     except Exception:

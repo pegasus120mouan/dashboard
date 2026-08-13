@@ -28,146 +28,92 @@ function stopTimer(elementId, intervalId) {
 
 let _criticalAlarms = [];   // cache pour le modal de détail (utilisé par modal.js)
 
+function _queryParams(days, dateFrom, dateTo, force = false) {
+  let params;
+  if (dateFrom && dateTo) {
+    params = `date_from=${dateFrom}&date_to=${dateTo}`;
+  } else {
+    params = `days=${days || currentDays || 30}`;
+  }
+  if (force) params += "&force=true";
+  return params;
+}
+
+function setForensicLoading(on) {
+  ["loading-impacted", "loading-sources", "loading-exploits"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = on ? "flex" : "none";
+  });
+}
+
+function renderForensicCharts(raw) {
+  const stats = {
+    sources: formatForChart(countOccurrences(raw, "source"), 10),
+    impacted: formatForChart(countOccurrences(raw, "impacted"), 10),
+    exploits: formatForChart(countOccurrences(raw.filter((d) => d.cve && d.cve !== ""), "cve"), 10),
+    typo: formatForChart(countOccurrences(raw, "type"), 10),
+  };
+  renderTopSourcesListChart(stats.sources);
+  renderTopSourcesChart(stats.impacted);
+  renderTopVulnsChart(stats.typo);
+  renderTopExploitsChart(stats.exploits);
+}
+
 // ── Callback requis par period.js ─────────────────────────────────────────────
-function _loadPageData(days, dateFrom, dateTo) {
+function _loadPageData(days, dateFrom, dateTo, force = false) {
   showLoader(true);
   spinRefresh(2000);
+  setForensicLoading(true);
 
-  // 1. Nettoyage des anciens graphiques (Reset)
-  const charts = [topSourcesChart, topSourcesListChart, topVulnsChart, topExploitsChart];
-  charts.forEach(c => { if(c) { c.destroy(); } });
-  topSourcesChart = topSourcesListChart = topVulnsChart = topExploitsChart = null;
-
-  // 2. Gestion des paramètres (Calendrier vs Jours)
-  const params = days ? `days=${days}` : `date_from=${dateFrom}&date_to=${dateTo}`;
-  
-  // 3. Lancement de TOUS les chronos en même temps
+  const params = _queryParams(days, dateFrom, dateTo, force);
   const timers = {
-    s: startTimer('timer-sources'),
-    i: startTimer('timer-impacted'),
-    v: startTimer('timer-vulns'),
-    e: startTimer('timer-exploits')
+    s: startTimer("timer-sources"),
+    i: startTimer("timer-impacted"),
+    v: startTimer("timer-vulns"),
+    e: startTimer("timer-exploits"),
   };
 
-  // 4. L'Appel UNIQUE (La Route Forensic)
-  fetch(`/api/stats/full-forensic?${params}`)
-    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .then(fullData => {
-      // 1. On affiche le conteneur AVANT de dessiner
-      const mainContent = document.getElementById('mainContent');
-      if (mainContent) mainContent.style.display = 'flex';
-
-      // 2. On rend les KPIs de base
-      renderAll(fullData.base_stats);
-
-      // 3. Extraction et vérification des données Forensic
-      // Dans main.js, modifie le calcul des stats comme ceci :
-      const raw = fullData.forensic_details || [];
-      console.log("Échantillon de données reçu :", raw[0]);
-
-      const stats = {
-        // On ne filtre plus les "N/A" ici, on laisse le graphique les gérer
-        sources:  formatForChart(countOccurrences(raw, 'source'), 10),
-        impacted: formatForChart(countOccurrences(raw, 'impacted'), 10),
-        exploits: formatForChart(countOccurrences(raw.filter(d => d.cve && d.cve !== ""), 'cve'), 10),
-        typo:     formatForChart(countOccurrences(raw, 'type'), 10)
-      };
-
-      // IMPORTANT : regarde tes fonctions de rendu. 
-      // Elles attendent 'data'. Vérifie qu'elles ne plantent pas si data est vide.
-      setTimeout(() => {
-          renderTopSourcesListChart(stats.sources); // <--- Top Sources
-          renderTopSourcesChart(stats.impacted);    // <--- Top Impacted
-          renderTopVulnsChart(stats.typo);         // <--- Top Typologie
-          renderTopExploitsChart(stats.exploits);   // <--- Top Exploits
-      }, 200);
-
+  fetch(`/api/metrics?${params}`)
+    .then((r) => {
+      if (!r.ok) throw new Error(r.status);
+      return r.json();
+    })
+    .then((data) => {
+      const mainContent = document.getElementById("mainContent");
+      if (mainContent) mainContent.style.display = "flex";
+      renderAll(data);
+      showLoader(false);
+      return fetch(`/api/stats/full-forensic?${params}`);
+    })
+    .then((r) => {
+      if (!r.ok) throw new Error(r.status);
+      return r.json();
+    })
+    .then((fullData) => {
+      renderForensicCharts(fullData.forensic_details || []);
+    })
+    .catch((err) => {
+      console.error("Chargement dashboard :", err);
+      const mainContent = document.getElementById("mainContent");
+      if (mainContent) mainContent.style.display = "flex";
       showLoader(false);
     })
     .finally(() => {
-      // 5. Arrêt de tous les timers d'un coup
-      stopTimer('timer-sources', timers.s);
-      stopTimer('timer-impacted', timers.i);
-      stopTimer('timer-vulns', timers.v);
-      stopTimer('timer-exploits', timers.e);
-      
-      // Cache les loaders spécifiques
-      ['loading-impacted', 'loading-sources', 'loading-exploits'].forEach(id => {
-        const el = document.getElementById(id);
-        if(el) el.style.display = 'none';
-      });
+      stopTimer("timer-sources", timers.s);
+      stopTimer("timer-impacted", timers.i);
+      stopTimer("timer-vulns", timers.v);
+      stopTimer("timer-exploits", timers.e);
+      setForensicLoading(false);
     });
 }
 
-// ── Bouton Actualiser ─────────────────────────────────────────────────────────
 function refreshData() {
-  showLoader(true);
-  spinRefresh(2000);
-
-  // 1. Nettoyage des anciens graphiques (Reset)
-  const charts = [topSourcesChart, topSourcesListChart, topVulnsChart, topExploitsChart];
-  charts.forEach(c => { if(c) { c.destroy(); } });
-  topSourcesChart = topSourcesListChart = topVulnsChart = topExploitsChart = null;
-
-  // 2. Gestion des paramètres (Calendrier vs Jours)
-  const params = days ? `days=${days}` : `date_from=${dateFrom}&date_to=${dateTo}`;
-  
-  // 3. Lancement de TOUS les chronos en même temps
-  const timers = {
-    s: startTimer('timer-sources'),
-    i: startTimer('timer-impacted'),
-    v: startTimer('timer-vulns'),
-    e: startTimer('timer-exploits')
-  };
-
-  // 4. L'Appel UNIQUE (La Route Forensic)
-  fetch(`/api/stats/full-forensic?${params}`)
-    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .then(fullData => {
-      // 1. On affiche le conteneur AVANT de dessiner
-      const mainContent = document.getElementById('mainContent');
-      if (mainContent) mainContent.style.display = 'flex';
-
-      // 2. On rend les KPIs de base
-      renderAll(fullData.base_stats);
-
-      // 3. Extraction et vérification des données Forensic
-      // Dans main.js, modifie le calcul des stats comme ceci :
-      const raw = fullData.forensic_details || [];
-      console.log("Échantillon de données reçu :", raw[0]);
-
-      const stats = {
-        // On ne filtre plus les "N/A" ici, on laisse le graphique les gérer
-        sources:  formatForChart(countOccurrences(raw, 'source'), 10),
-        impacted: formatForChart(countOccurrences(raw, 'impacted'), 10),
-        exploits: formatForChart(countOccurrences(raw.filter(d => d.cve && d.cve !== ""), 'cve'), 10),
-        typo:     formatForChart(countOccurrences(raw, 'type'), 10)
-      };
-
-      // IMPORTANT : regarde tes fonctions de rendu. 
-      // Elles attendent 'data'. Vérifie qu'elles ne plantent pas si data est vide.
-      setTimeout(() => {
-          renderTopSourcesListChart(stats.sources); // <--- Top Sources
-          renderTopSourcesChart(stats.impacted);    // <--- Top Impacted
-          renderTopVulnsChart(stats.typo);         // <--- Top Typologie
-          renderTopExploitsChart(stats.exploits);   // <--- Top Exploits
-      }, 200);
-
-      showLoader(false);
-    })
-    .finally(() => {
-      // 5. Arrêt de tous les timers d'un coup
-      stopTimer('timer-sources', timers.s);
-      stopTimer('timer-impacted', timers.i);
-      stopTimer('timer-vulns', timers.v);
-      stopTimer('timer-exploits', timers.e);
-      
-      // Cache les loaders spécifiques
-      ['loading-impacted', 'loading-sources', 'loading-exploits'].forEach(id => {
-        const el = document.getElementById(id);
-        if(el) el.style.display = 'none';
-      });
-    });
+  _loadPageData(
+    customDateFrom ? null : currentDays,
+    customDateFrom,
+    customDateTo,
+    true
+  );
 }
 
 // ── KPI → ouvre la page Events filtrée dans un nouvel onglet ─────────────────

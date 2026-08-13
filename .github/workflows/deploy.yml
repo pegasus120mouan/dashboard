@@ -1,0 +1,51 @@
+name: Deploy SirDashboard
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          port: ${{ secrets.SSH_PORT }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -euo pipefail
+            APP_DIR="${{ secrets.APP_DIR }}"
+            cd "$APP_DIR"
+
+            if [ "$(id -u)" -eq 0 ]; then SUDO=""; else SUDO="sudo"; fi
+
+            git config --global --add safe.directory "$APP_DIR"
+
+            # Ne jamais écraser le .env de production
+            if [ -f .env ]; then
+              cp -a .env /tmp/sirdashboard.env.bak
+            fi
+
+            git fetch --all
+            git reset --hard origin/main
+
+            if [ -f /tmp/sirdashboard.env.bak ]; then
+              cp -a /tmp/sirdashboard.env.bak .env
+            fi
+
+            if [ ! -x venv/bin/pip ]; then
+              python3 -m venv venv
+            fi
+            ./venv/bin/pip install --upgrade pip
+            ./venv/bin/pip install -r requirements.txt
+
+            $SUDO chown -R www-data:www-data "$APP_DIR"
+            $SUDO chmod 640 .env
+            $SUDO chmod 750 "$APP_DIR"
+
+            $SUDO systemctl restart sirdashboard
+            $SUDO systemctl is-active --quiet sirdashboard
+            curl -fsS -o /dev/null -I --max-time 10 http://127.0.0.1:8010/ || true
