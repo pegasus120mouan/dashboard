@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, jsonify, flash
+from flask import Blueprint, render_template, request, redirect, jsonify, flash, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from database import db, User, UserRole
 
@@ -46,21 +46,43 @@ def me():
 # GESTION DES UTILISATEURS (CRUD + HIÉRARCHIE DES RÔLES)
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _role_of(user) -> str:
+    if hasattr(user, "role_value"):
+        return user.role_value
+    role = getattr(user, "role", None)
+    return role.value if hasattr(role, "value") else str(role or "Analyst")
+
+
 @auth_bp.route("/users", methods=["GET"])
 @login_required
 def list_users():
-    # Protection : Seuls SuperAdmin et Admin y ont accès
-    if current_user.role not in [UserRole.SUPERADMIN, UserRole.ADMIN]:
+    if _role_of(current_user) not in ("SuperAdmin", "Admin"):
         flash("Accès non autorisé.", "danger")
         return redirect("/")
-        
-    users = User.query.all()
-    return render_template("users.html", users=users, active_tab="users")
+
+    try:
+        users = User.query.order_by(User.id.asc()).all()
+    except Exception:
+        current_app.logger.exception("Impossible de charger les utilisateurs")
+        flash("Impossible de charger la liste des comptes. Vérifiez la connexion à la base.", "danger")
+        users = []
+    role_counts = {
+        "total": len(users),
+        "superadmin": sum(1 for u in users if _role_of(u) == "SuperAdmin"),
+        "admin": sum(1 for u in users if _role_of(u) == "Admin"),
+        "analyst": sum(1 for u in users if _role_of(u) == "Analyst"),
+    }
+    return render_template(
+        "users.html",
+        users=users,
+        role_counts=role_counts,
+        active_tab="users",
+    )
 
 @auth_bp.route("/users/create", methods=["POST"])
 @login_required
 def create_user():
-    if current_user.role not in [UserRole.SUPERADMIN, UserRole.ADMIN]:
+    if _role_of(current_user) not in ("SuperAdmin", "Admin"):
         flash("Accès non autorisé.", "danger")
         return redirect("/")
 
@@ -92,7 +114,7 @@ def create_user():
 @auth_bp.route("/users/update/<int:user_id>", methods=["POST"])
 @login_required
 def update_user(user_id):
-    if current_user.role not in [UserRole.SUPERADMIN, UserRole.ADMIN]:
+    if _role_of(current_user) not in ("SuperAdmin", "Admin"):
         flash("Accès non autorisé.", "danger")
         return redirect("/")
 
@@ -124,7 +146,7 @@ def update_user(user_id):
 @auth_bp.route("/users/delete/<int:user_id>", methods=["POST"])
 @login_required
 def delete_user(user_id):
-    if current_user.role not in [UserRole.SUPERADMIN, UserRole.ADMIN]:
+    if _role_of(current_user) not in ("SuperAdmin", "Admin"):
         flash("Accès non autorisé.", "danger")
         return redirect("/")
 

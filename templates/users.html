@@ -1,207 +1,308 @@
 {% extends "base.html" %}
 
-{% block title %}Gestion des Utilisateurs{% endblock %}
+{% block title %}Gestion des utilisateurs{% endblock %}
 
 {% block body %}
-<div class="dashboard-container" style="padding: 24px; max-width: 1300px; margin: 0 auto;">
-    
-    <!-- En-tête de la page -->
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-        <div>
-            <h2 style="font-size: 20px; font-weight: 700; color: #f8fafc; margin: 0 0 6px 0; display: flex; align-items: center; gap: 10px;">
-                <i class="fa-solid fa-users-gear" style="color: #3b82f6;"></i>
-                Gestion des Utilisateurs
-            </h2>
-            <p style="font-size: 13px; color: #94a3b8; margin: 0;">
-                Administration des accès et des rôles de la plateforme SOC
-            </p>
-        </div>
+<main class="main users-main">
+
+  <header class="users-hero">
+    <div class="users-hero-title">
+      <div class="users-hero-icon"><i class="fa-solid fa-users-gear"></i></div>
+      <div>
+        <h1>Gestion des utilisateurs</h1>
+        <p>Administration des accès, des rôles et des comptes de la plateforme SOC.</p>
+      </div>
     </div>
 
-    <!-- Zone de notifications / Messages Flash -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                {% set border_color = '#ef4444' if category == 'danger' else '#10b981' %}
-                <div style="padding: 12px 16px; border-radius: 6px; margin-bottom: 20px; font-size: 13px; background: #1e293b; border-left: 4px solid {{ border_color }}; color: #f8fafc; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-                    <i class="fa-solid {% if category == 'danger' %}fa-triangle-exclamation{% else %}fa-circle-check{% endif %}" style="color: {{ border_color }};"></i>
-                    <span>{{ message }}</span>
-                </div>
+    <div class="users-stats">
+      <div class="users-stat">
+        <div class="users-stat-label">Comptes</div>
+        <div class="users-stat-value">{{ role_counts.total if role_counts is defined else users|length }}</div>
+      </div>
+      <div class="users-stat users-stat-sa">
+        <div class="users-stat-label">SuperAdmin</div>
+        <div class="users-stat-value">{{ role_counts.superadmin if role_counts is defined else 0 }}</div>
+      </div>
+      <div class="users-stat users-stat-ad">
+        <div class="users-stat-label">Admins</div>
+        <div class="users-stat-value">{{ role_counts.admin if role_counts is defined else 0 }}</div>
+      </div>
+      <div class="users-stat users-stat-an">
+        <div class="users-stat-label">Analystes</div>
+        <div class="users-stat-value">{{ role_counts.analyst if role_counts is defined else 0 }}</div>
+      </div>
+    </div>
+  </header>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="users-alert {% if category == 'danger' %}users-alert-danger{% else %}users-alert-success{% endif %}">
+          <i class="fa-solid {% if category == 'danger' %}fa-triangle-exclamation{% else %}fa-circle-check{% endif %}"></i>
+          <span>{{ message }}</span>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <div class="users-layout">
+
+    <section class="users-card">
+      <div class="users-card-head">
+        <h2><i class="fa-solid fa-user-plus"></i> Nouvel accès</h2>
+      </div>
+      <p class="users-card-hint">Le compte pourra se connecter immédiatement. Le SuperAdmin ne peut pas être créé depuis ce formulaire.</p>
+
+      <form action="/users/create" method="POST" autocomplete="off">
+        <div class="users-field">
+          <label for="newUsername">Identifiant e-mail</label>
+          <div class="users-input-wrap">
+            <i class="fa-solid fa-envelope"></i>
+            <input id="newUsername" type="email" name="username" required placeholder="analyste@sahsoc.ci" autocomplete="off">
+          </div>
+        </div>
+
+        <div class="users-field">
+          <label for="newPassword">Mot de passe temporaire</label>
+          <div class="users-input-wrap">
+            <i class="fa-solid fa-lock"></i>
+            <input id="newPassword" type="password" name="password" required placeholder="••••••••" minlength="8" autocomplete="new-password">
+            <button type="button" class="users-toggle-pass" data-target="newPassword" title="Afficher le mot de passe" aria-label="Afficher le mot de passe">
+              <i class="fa-solid fa-eye"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="users-field">
+          <label>Rôle attribué</label>
+          <div class="users-role-picks">
+            <label class="users-role-pick">
+              <input type="radio" name="role" value="Analyst" checked>
+              <span>
+                <strong>Analyste SOC</strong>
+                <small>Consultation du dashboard, des événements et des dossiers.</small>
+              </span>
+            </label>
+            <label class="users-role-pick">
+              <input type="radio" name="role" value="Admin">
+              <span>
+                <strong>Administrateur</strong>
+                <small>Gestion des comptes Analyste et Admin, hors SuperAdmin.</small>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <button type="submit" class="users-submit">
+          <i class="fa-solid fa-check"></i> Créer le compte
+        </button>
+      </form>
+    </section>
+
+    <section class="users-card">
+      <div class="users-card-head">
+        <h2><i class="fa-solid fa-id-badge"></i> Comptes actifs</h2>
+        <span class="card-badge">{{ users|length }} utilisateur{% if users|length > 1 %}s{% endif %}</span>
+      </div>
+
+      <div class="users-toolbar">
+        <div class="users-search">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input type="search" id="usersSearch" placeholder="Rechercher un e-mail ou un rôle…" aria-label="Filtrer les comptes">
+        </div>
+      </div>
+
+      <div class="users-table-wrap">
+        <table class="users-table">
+          <thead>
+            <tr>
+              <th>Utilisateur</th>
+              <th>Rôle</th>
+              <th style="text-align: right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="usersTableBody">
+            {% for user in users %}
+              {% set role = user.role_value %}
+              {% set is_you = user.id == current_user.id %}
+              <tr class="{% if is_you %}is-you{% endif %}" data-search="{{ user.username }} {{ role }}">
+                <td>
+                  <div class="users-identity">
+                    <div class="users-avatar {% if role == 'SuperAdmin' %}users-avatar-sa{% elif role == 'Admin' %}users-avatar-ad{% else %}users-avatar-an{% endif %}">
+                      {{ user.initials }}
+                    </div>
+                    <div>
+                      <div class="users-email">
+                        {{ user.username }}
+                        {% if is_you %}<span class="users-you">Vous</span>{% endif %}
+                      </div>
+                      <div class="users-id">ID #{{ user.id }}</div>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  {% if role == 'SuperAdmin' %}
+                    <span class="users-badge users-badge-sa"><i class="fa-solid fa-shield-halved"></i> SuperAdmin</span>
+                  {% elif role == 'Admin' %}
+                    <span class="users-badge users-badge-ad"><i class="fa-solid fa-user-shield"></i> Administrateur</span>
+                  {% else %}
+                    <span class="users-badge users-badge-an"><i class="fa-solid fa-user"></i> Analyste SOC</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <div class="users-actions">
+                    {% if current_user.role_value == 'SuperAdmin' or (current_user.role_value == 'Admin' and role != 'SuperAdmin') %}
+                      <button type="button"
+                              class="users-action"
+                              title="Modifier le compte"
+                              data-user-id="{{ user.id }}"
+                              data-username="{{ user.username }}"
+                              data-role="{{ role }}"
+                              onclick="openEditModal(this)">
+                        <i class="fa-solid fa-pen"></i>
+                      </button>
+                    {% endif %}
+
+                    {% if not is_you and (current_user.role_value == 'SuperAdmin' or (current_user.role_value == 'Admin' and role != 'SuperAdmin')) %}
+                      <form action="/users/delete/{{ user.id }}" method="POST" onsubmit="return confirm('Supprimer définitivement le compte {{ user.username }} ?');">
+                        <button type="submit" class="users-action users-action-danger" title="Supprimer le compte">
+                          <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                      </form>
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="3">
+                  <div class="users-empty">
+                    <i class="fa-solid fa-user-slash"></i>
+                    Aucun compte à afficher.
+                  </div>
+                </td>
+              </tr>
             {% endfor %}
-        {% endif %}
-    {% endwith %}
+          </tbody>
+        </table>
+      </div>
+      <div id="usersEmptyFilter" class="users-empty" style="display: none;">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        Aucun compte ne correspond à la recherche.
+      </div>
+    </section>
 
-    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 24px; align-items: start;">
-        
-        <!-- Formulaire de création -->
-        <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 20px;">
-            <h3 style="font-size: 15px; font-weight: 600; color: #f8fafc; margin: 0 0 16px 0; padding-bottom: 12px; border-bottom: 1px solid #334155; display: flex; align-items: center; gap: 8px;">
-                <i class="fa-solid fa-user-plus" style="color: #3b82f6;"></i>
-                Créer un utilisateur
-            </h3>
-            
-            <form action="/users/create" method="POST" style="display: flex; flex-direction: column; gap: 16px;">
-                <div>
-                    <label style="display: block; font-size: 12px; font-weight: 500; color: #94a3b8; margin-bottom: 6px;">Email (Username)</label>
-                    <input type="email" name="username" required placeholder="ex: analyste@sahsoc.ci" autocomplete="off"
-                           style="width: 100%; padding: 10px 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #f8fafc; font-size: 13px; box-sizing: border-box; outline: none;">
-                </div>
+  </div>
+</main>
 
-                <div>
-                    <label style="display: block; font-size: 12px; font-weight: 500; color: #94a3b8; margin-bottom: 6px;">Mot de passe</label>
-                    <input type="password" name="password" required placeholder="••••••••"
-                           style="width: 100%; padding: 10px 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #f8fafc; font-size: 13px; box-sizing: border-box; outline: none;">
-                </div>
-
-                <div>
-                    <label style="display: block; font-size: 12px; font-weight: 500; color: #94a3b8; margin-bottom: 6px;">Rôle</label>
-                    <select name="role" required style="width: 100%; padding: 10px 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #f8fafc; font-size: 13px; box-sizing: border-box; outline: none; cursor: pointer;">
-                        <option value="Analyst">Analyste SOC</option>
-                        <option value="Admin">Administrateur</option>
-                    </select>
-                </div>
-
-                <button type="submit" style="margin-top: 8px; padding: 10px 16px; background: #2563eb; color: #ffffff; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                    <i class="fa-solid fa-check"></i> Enregistrer
-                </button>
-            </form>
+<div id="editUserModal" class="users-modal-overlay" onclick="if (event.target === this) closeEditModal()">
+  <div class="users-modal" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
+    <div class="users-modal-header">
+      <div>
+        <h3 id="editModalTitle">Modifier le compte</h3>
+        <p>Mise à jour du mot de passe ou du rôle d’accès.</p>
+      </div>
+      <button type="button" class="btn-modal-close" onclick="closeEditModal()" title="Fermer">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div class="users-modal-body">
+      <form id="editForm" method="POST" action="">
+        <div class="users-field">
+          <label for="editUsername">Identifiant</label>
+          <div class="users-input-wrap">
+            <i class="fa-solid fa-envelope"></i>
+            <input type="text" id="editUsername" disabled>
+          </div>
         </div>
 
-        <!-- Tableau d'affichage -->
-        <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 20px;">
-            <h3 style="font-size: 15px; font-weight: 600; color: #f8fafc; margin: 0 0 16px 0; padding-bottom: 12px; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between;">
-                <span><i class="fa-solid fa-list" style="color: #3b82f6; margin-right: 8px;"></i>Comptes actifs</span>
-                <span style="font-size: 12px; background: #0f172a; padding: 2px 8px; border-radius: 12px; color: #94a3b8;">
-                    {{ users|length }} utilisateur(s)
-                </span>
-            </h3>
-
-            <div style="overflow-x: auto;">
-                <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
-                    <thead>
-                        <tr style="border-bottom: 1px solid #334155; color: #64748b; font-size: 11px; text-transform: uppercase;">
-                            <th style="padding: 10px 8px;">ID</th>
-                            <th style="padding: 10px 8px;">Utilisateur</th>
-                            <th style="padding: 10px 8px;">Rôle</th>
-                            <th style="padding: 10px 8px; text-align: right;">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for user in users %}
-                        <tr style="border-bottom: 1px solid #334155;">
-                            <td style="padding: 12px 8px; color: #64748b;">#{{ user.id }}</td>
-                            
-                            <td style="padding: 12px 8px; font-weight: 600; color: #f8fafc;">
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <i class="fa-solid fa-circle-user" style="color: #64748b; font-size: 16px;"></i>
-                                    {{ user.username }}
-                                </div>
-                            </td>
-                            
-                            <td style="padding: 12px 8px;">
-                                {% if user.role.value == 'SuperAdmin' %}
-                                    <span style="font-size: 11px; padding: 3px 8px; border-radius: 4px; background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3); font-weight: 600;">
-                                        SuperAdmin
-                                    </span>
-                                {% elif user.role.value == 'Admin' %}
-                                    <span style="font-size: 11px; padding: 3px 8px; border-radius: 4px; background: rgba(234, 179, 8, 0.15); color: #fde047; border: 1px solid rgba(234, 179, 8, 0.3); font-weight: 500;">
-                                        Administrateur
-                                    </span>
-                                {% else %}
-                                    <span style="font-size: 11px; padding: 3px 8px; border-radius: 4px; background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.3); font-weight: 500;">
-                                        Analyste SOC
-                                    </span>
-                                {% endif %}
-                            </td>
-                            
-                            <!-- ACTIONS -->
-                            <td style="padding: 12px 8px; text-align: right;">
-                                <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px;">
-                                    
-                                    <!-- Bouton Éditer (Accessible selon les permissions) -->
-                                    {% if current_user.role.value == 'SuperAdmin' or (current_user.role.value == 'Admin' and user.role.value != 'SuperAdmin') %}
-                                    <button type="button" 
-                                            onclick="openEditModal({{ user.id }}, '{{ user.username }}', '{{ user.role.value }}')"
-                                            style="background: none; border: none; color: #94a3b8; cursor: pointer; padding: 4px;" 
-                                            title="Modifier le mot de passe / rôle">
-                                        <i class="fa-solid fa-pen-to-square"></i>
-                                    </button>
-                                    {% endif %}
-
-                                    <!-- Bouton Supprimer (Auto-suppression et suppression SuperAdmin par Admin interdites) -->
-                                    {% if user.id != current_user.id and (current_user.role.value == 'SuperAdmin' or (current_user.role.value == 'Admin' and user.role.value != 'SuperAdmin')) %}
-                                    <form action="/users/delete/{{ user.id }}" method="POST" style="display: inline;" onsubmit="return confirm('Confirmer la suppression de cet utilisateur ?');">
-                                        <button type="submit" style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 4px;" title="Supprimer">
-                                            <i class="fa-solid fa-trash-can"></i>
-                                        </button>
-                                    </form>
-                                    {% endif %}
-
-                                    {% if user.id == current_user.id %}
-                                    <span style="font-size: 11px; color: #64748b; font-style: italic;">(Vous)</span>
-                                    {% endif %}
-
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+        <div class="users-field">
+          <label for="editPassword">Nouveau mot de passe</label>
+          <div class="users-input-wrap">
+            <i class="fa-solid fa-lock"></i>
+            <input type="password" id="editPassword" name="new_password" placeholder="Laisser vide pour ne pas changer" autocomplete="new-password">
+            <button type="button" class="users-toggle-pass" data-target="editPassword" title="Afficher le mot de passe">
+              <i class="fa-solid fa-eye"></i>
+            </button>
+          </div>
         </div>
 
+        <div class="users-field" id="roleSelectGroup">
+          <label for="editRole">Rôle</label>
+          <div class="users-input-wrap">
+            <i class="fa-solid fa-user-shield"></i>
+            <select name="role" id="editRole">
+              <option value="Analyst">Analyste SOC</option>
+              <option value="Admin">Administrateur</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px;">
+          <button type="button" class="users-btn-ghost" onclick="closeEditModal()">Annuler</button>
+          <button type="submit" class="users-submit" style="width: auto; padding: 0 18px; margin: 0; height: 40px;">
+            Enregistrer
+          </button>
+        </div>
+      </form>
     </div>
+  </div>
 </div>
+{% endblock %}
 
-<!-- Modal de Modification -->
-<div id="editUserModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); align-items: center; justify-content: center; z-index: 1000;">
-    <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; width: 100%; max-width: 400px; padding: 20px;">
-        <h3 style="margin-top: 0; color: #f8fafc; font-size: 16px; margin-bottom: 16px;">Modifier l'utilisateur</h3>
-        <form id="editForm" method="POST" action="">
-            <div style="margin-bottom: 12px;">
-                <label style="display: block; font-size: 12px; color: #94a3b8; margin-bottom: 4px;">Email (Username)</label>
-                <input type="text" id="editUsername" disabled style="width: 100%; padding: 8px; background: #0f172a; border: 1px solid #334155; border-radius: 4px; color: #64748b; box-sizing: border-box;">
-            </div>
-            
-            <div style="margin-bottom: 12px;">
-                <label style="display: block; font-size: 12px; color: #94a3b8; margin-bottom: 4px;">Nouveau mot de passe (laisser vide si inchangé)</label>
-                <input type="password" name="new_password" placeholder="••••••••" style="width: 100%; padding: 8px; background: #0f172a; border: 1px solid #334155; border-radius: 4px; color: #fff; box-sizing: border-box;">
-            </div>
-
-            <div style="margin-bottom: 16px;" id="roleSelectGroup">
-                <label style="display: block; font-size: 12px; color: #94a3b8; margin-bottom: 4px;">Rôle</label>
-                <select name="role" id="editRole" style="width: 100%; padding: 8px; background: #0f172a; border: 1px solid #334155; border-radius: 4px; color: #fff; box-sizing: border-box;">
-                    <option value="Analyst">Analyste SOC</option>
-                    <option value="Admin">Administrateur</option>
-                </select>
-            </div>
-
-            <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px;">
-                <button type="button" onclick="closeEditModal()" style="padding: 8px 12px; background: #334155; color: #fff; border: none; border-radius: 4px; cursor: pointer;">Annuler</button>
-                <button type="submit" style="padding: 8px 12px; background: #2563eb; color: #fff; border: none; border-radius: 4px; cursor: pointer;">Enregistrer</button>
-            </div>
-        </form>
-    </div>
-</div>
-
+{% block scripts %}
 <script>
-function openEditModal(id, username, role) {
-    document.getElementById('editForm').action = '/users/update/' + id;
-    document.getElementById('editUsername').value = username;
-    
-    const roleSelectGroup = document.getElementById('roleSelectGroup');
-    if (role === 'SuperAdmin') {
-        roleSelectGroup.style.display = 'none'; // Le rôle du SuperAdmin ne peut pas être rétrogadé depuis cette vue
-    } else {
-        roleSelectGroup.style.display = 'block';
-        document.getElementById('editRole').value = role;
-    }
-    
-    document.getElementById('editUserModal').style.display = 'flex';
+function openEditModal(btn) {
+  const id = btn.dataset.userId;
+  const username = btn.dataset.username;
+  const role = btn.dataset.role;
+
+  document.getElementById("editForm").action = "/users/update/" + id;
+  document.getElementById("editUsername").value = username;
+  document.getElementById("editPassword").value = "";
+
+  const roleSelectGroup = document.getElementById("roleSelectGroup");
+  if (role === "SuperAdmin") {
+    roleSelectGroup.style.display = "none";
+  } else {
+    roleSelectGroup.style.display = "block";
+    document.getElementById("editRole").value = role;
+  }
+
+  document.getElementById("editUserModal").classList.add("is-open");
 }
 
 function closeEditModal() {
-    document.getElementById('editUserModal').style.display = 'none';
+  document.getElementById("editUserModal").classList.remove("is-open");
 }
+
+document.querySelectorAll(".users-toggle-pass").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const input = document.getElementById(btn.dataset.target);
+    if (!input) return;
+    const hidden = input.type === "password";
+    input.type = hidden ? "text" : "password";
+    btn.querySelector("i").className = hidden ? "fa-solid fa-eye-slash" : "fa-solid fa-eye";
+  });
+});
+
+const searchInput = document.getElementById("usersSearch");
+const emptyFilter = document.getElementById("usersEmptyFilter");
+if (searchInput) {
+  searchInput.addEventListener("input", () => {
+    const q = searchInput.value.trim().toLowerCase();
+    let visible = 0;
+    document.querySelectorAll("#usersTableBody tr[data-search]").forEach((row) => {
+      const match = !q || row.dataset.search.toLowerCase().includes(q);
+      row.style.display = match ? "" : "none";
+      if (match) visible += 1;
+    });
+    if (emptyFilter) emptyFilter.style.display = visible === 0 ? "block" : "none";
+  });
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeEditModal();
+});
 </script>
 {% endblock %}

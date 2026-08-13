@@ -25,11 +25,24 @@ class User(UserMixin, db.Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
+    @property
+    def role_value(self) -> str:
+        role = self.role
+        if role is None:
+            return UserRole.ANALYST.value
+        return role.value if isinstance(role, UserRole) else str(role)
+
+    @property
+    def initials(self) -> str:
+        local = (self.username or "U").split("@")[0]
+        letters = "".join(ch for ch in local if ch.isalnum())[:2]
+        return (letters or "U").upper()
+
     def to_dict(self):
         return {
             "id": self.id,
             "username": self.username,
-            "role": self.role.value
+            "role": self.role_value
         }
 
 def init_db(app):

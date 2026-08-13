@@ -25,7 +25,7 @@
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
     />
   </head>
-  <body>
+    <body class="{% block body_class %}{% if active_tab == 'users' %}page-users{% endif %}{% endblock %}">
     <!-- ══ HEADER ══════════════════════════════════════════════════════════════ -->
     <header class="header">
       <div class="header-left">
@@ -60,7 +60,7 @@
         </a>
         
         <!-- Onglet affiché uniquement pour SuperAdmin et Admin -->
-        {% if current_user.role.value in ['SuperAdmin', 'Admin'] %}
+        {% if current_user.is_authenticated and current_user.role_value in ['SuperAdmin', 'Admin'] %}
         <a
           href="/users"
           class="header-tab {% if active_tab == 'users' %}active{% endif %}"
