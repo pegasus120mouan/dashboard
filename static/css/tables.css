@@ -1,0 +1,77 @@
+/* ══════════════════════════════════════════════════════════════════════
+   tables.css — Tables, badges, barres de progression
+══════════════════════════════════════════════════════════════════════ */
+
+.table-section {
+  background: var(--bg-card);
+  background-image: var(--card-shine);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: var(--shadow);
+}
+.table-wrapper { overflow-x: auto; width: 100%; -webkit-overflow-scrolling: touch; }
+
+.data-table { width: 100%; border-collapse: collapse; font-size: 12.5px; text-align: left; }
+.data-table th {
+  padding: 11px 12px;
+  background: rgba(255,255,255,.025);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: .08em;
+  font-weight: 650;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.data-table td { padding: 11px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tbody tr { transition: background .15s; }
+.data-table tbody tr:hover td { background: rgba(77,159,255,.06); }
+
+.alarm-row-clickable            { cursor: pointer; }
+.alarm-row-clickable:hover      { background: rgba(77,159,255,.07) !important; }
+
+.badge {
+  display: inline-flex; align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.badge-status-new    { background: rgba(255,77,90,.15);  color: var(--red);    border: 1px solid rgba(255,77,90,.3); }
+.badge-status-open   { background: rgba(255,154,60,.15); color: var(--orange); border: 1px solid rgba(255,154,60,.3); }
+.badge-status-closed { background: rgba(46,229,157,.15); color: var(--green);  border: 1px solid rgba(46,229,157,.3); }
+.badge-status-other  { background: rgba(77,159,255,.12); color: var(--blue);   border: 1px solid rgba(77,159,255,.3); }
+.badge-attack        { background: rgba(181,123,255,.15); color: var(--purple); border: 1px solid rgba(181,123,255,.3); font-size: 10px; }
+
+.badge-rr9 { background: rgba(255,77,90,.18);  color: #ff707a; border: 1px solid rgba(255,77,90,.4);   font-size: 10px; }
+.badge-rr8 { background: rgba(208,64,0,.18);   color: #ff8040; border: 1px solid rgba(208,64,0,.4);    font-size: 10px; }
+.badge-rr6 { background: rgba(245,197,66,.15); color: #f5c542; border: 1px solid rgba(245,197,66,.35); font-size: 10px; }
+.badge-rr5 { background: rgba(224,92,138,.15); color: #e05c8a; border: 1px solid rgba(224,92,138,.3);  font-size: 10px; }
+.badge-rr4 { background: rgba(46,230,240,.12); color: #2ee6f0; border: 1px solid rgba(46,230,240,.3);   font-size: 10px; }
+.badge-rr0 { background: rgba(61,85,112,.2);   color: #6a8aaa; border: 1px solid rgba(61,85,112,.4);   font-size: 10px; }
+
+.progress-bar {
+  display: flex; align-items: center; gap: 8px;
+  min-width: 100px;
+}
+.progress-track {
+  flex: 1; height: 6px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--blue), var(--purple));
+  transition: width .5s ease;
+  box-shadow: 0 0 10px rgba(77,159,255,0.35);
+}
+.progress-label { font-size: 11px; color: var(--text-muted); white-space: nowrap; font-family: var(--font-mono); }

@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Rapport de Sécurité SOC LogRhythm</title>
+    <style>
+        /* CONFIGURATION DE LA PAGE & PAGINATION WEASYPRINT */
+        @page { 
+            size: A4; 
+            margin: 20mm 15mm 20mm 15mm; 
+            
+            /* En-tête discret répété sur toutes les pages */
+            @top-right {
+                content: "SirDashboard — Rapport SOC";
+                font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
+                font-size: 8px;
+                color: #94a3b8;
+            }
+
+            /* Pied de page avec numérotation automatique */
+            @bottom-left {
+                content: "Confidentiel — Usage interne uniquement";
+                font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
+                font-size: 8px;
+                color: #94a3b8;
+            }
+
+            @bottom-right {
+                content: "Page " counter(page) " / " counter(pages);
+                font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
+                font-size: 8px;
+                font-weight: bold;
+                color: #64748b;
+            }
+        }
+
+        body { font-family: 'Segoe UI', Helvetica, Arial, sans-serif; color: #1e293b; font-size: 11px; }
+        
+        .header { border-bottom: 2px solid #0284c7; padding-bottom: 10px; margin-bottom: 20px; }
+        .title { font-size: 20px; font-weight: bold; color: #0f172a; }
+        .subtitle { font-size: 11px; color: #64748b; }
+        
+        /* Grilles pour les cartes KPI */
+        .kpi-table { width: 100%; border-collapse: separate; border-spacing: 8px; margin-bottom: 15px; border: none; }
+        .kpi-table td { border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 4px; padding: 10px; text-align: center; width: 25%; }
+        
+        .kpi-val { font-size: 18px; font-weight: bold; margin-top: 4px; }
+        .red { color: #dc2626; }
+        .orange { color: #ea580c; }
+        .yellow { color: #d97706; }
+        .green { color: #16a34a; }
+        .blue { color: #0284c7; }
+
+        .details-list { font-size: 9px; color: #475569; margin-top: 6px; text-align: left; }
+        .details-list div { display: flex; justify-content: space-between; border-bottom: 1px dashed #cbd5e1; padding: 2px 0; }
+
+        /* Style des tableaux de données */
+        table.data-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10px; }
+        table.data-table th, table.data-table td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; }
+        table.data-table th { background-color: #f1f5f9; font-weight: bold; color: #0f172a; }
+        table.data-table tr:nth-child(even) { background-color: #f8fafc; }
+        
+        /* Éviter de couper les lignes de tableau au milieu d'un saut de page */
+        tr { page-break-inside: avoid; }
+        h3 { page-break-after: avoid; margin-top: 20px; }
+
+        .badge { padding: 2px 6px; border-radius: 3px; font-weight: bold; font-size: 9px; display: inline-block; }
+        .badge-critical { background-color: #fecaca; color: #991b1b; }
+        .badge-high { background-color: #ffedd5; color: #9a3412; }
+    
+
+        .summary-container {
+            margin-top: 35px;
+            page-break-inside: avoid;
+        }
+        .summary-card {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-left: 4px solid #0284c7;
+            padding: 14px 18px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .summary-title {
+            font-size: 13px;
+            font-weight: bold;
+            color: #0f172a;
+            margin-bottom: 12px;
+        }
+        .summary-item {
+            margin-bottom: 10px;
+            line-height: 1.5;
+            font-size: 10.5px;
+            color: #334155;
+        }
+        .summary-item:last-child {
+            margin-bottom: 0;
+        }
+        .summary-label {
+            font-weight: bold;
+            color: #0284c7;
+            display: block;
+            margin-bottom: 2px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- EN-TÊTE PRINCIPAL -->
+    <div class="header">
+        <div class="title">SirDashboard — Rapport d'Activité LogRhythm</div>
+        <div class="subtitle">Généré le : {{ data.generated_at }} | Période : du {{ data.date_from[:10] }} au {{ data.date_to[:10] }}</div>
+    </div>
+
+    <!-- SECTION 1 : SYNTHÈSE DES ALERTES NORMALES -->
+    <h3>1. Synthèse des Événements &amp; Alertes Normales</h3>
+    <table class="kpi-table">
+        <tr>
+            <td>
+                <span class="subtitle">Total Alertes</span>
+                <div class="kpi-val blue">{{ data.total_alarms }}</div>
+            </td>
+            <td>
+                <span class="subtitle">Critical (RR ≥ 9)</span>
+                <div class="kpi-val red">{{ data.sev_critical }}</div>
+            </td>
+            <td>
+                <span class="subtitle">High (RR 8)</span>
+                <div class="kpi-val orange">{{ data.sev_high }}</div>
+            </td>
+            <td>
+                <span class="subtitle">Medium / Low</span>
+                <div class="kpi-val blue">{{ data.sev_medium + data.sev_low }}</div>
+                <div class="details-list">
+                    <div><span>Medium (RR 5-7):</span> <b>{{ data.sev_medium }}</b></div>
+                    <div><span>Low (RR 0-4):</span> <b>{{ data.sev_low }}</b></div>
+                </div>
+            </td>
+        </tr>
+    </table>
+
+    <!-- SECTION 2 : SYNTHÈSE DES INTRUSIONS -->
+    <h3>2. Tentatives d'Intrusion &amp; Compromissions</h3>
+    <table class="kpi-table">
+        <tr>
+            <td style="width: 30%;">
+                <span class="subtitle">Total Intrusions</span>
+                <div class="kpi-val red">{{ data.intrusion_attempts }}</div>
+                <div class="details-list">
+                    <div><span>Niveau Critical:</span> <b class="red">{{ data.int_crit }}</b></div>
+                    <div><span>Niveau High:</span> <b class="orange">{{ data.int_high }}</b></div>
+                </div>
+            </td>
+            <td style="width: 70%;" colspan="3">
+                <span class="subtitle">Répartition par Type de Menace</span>
+                <div class="details-list" style="margin-top: 10px; font-size: 10px;">
+                    <div><span>Configuration Modifiée :</span> <b>{{ data.intrusion_details.get('config_mod', 0) }}</b></div>
+                    <div><span>Malwares &amp; Ransomwares :</span> <b>{{ data.intrusion_details.get('malware', 0) }}</b></div>
+                    <div><span>Attaques Brute Force :</span> <b>{{ data.intrusion_details.get('brute_force', 0) }}</b></div>
+                    <div><span>Attaques Web / Injection :</span> <b>{{ data.intrusion_details.get('web_attack', 0) }}</b></div>
+                </div>
+            </td>
+        </tr>
+    </table>
+
+    <!-- SECTION 3 : QUALITÉ & DOSSIERS (CASES) -->
+    <h3>3. Qualification &amp; Dossiers SOC (Cases)</h3>
+    <table class="kpi-table">
+        <tr>
+            <td>
+                <span class="subtitle">Total Cases Période</span>
+                <div class="kpi-val blue">{{ data.total_cases }}</div>
+            </td>
+            <td>
+                <span class="subtitle">Cases Traités</span>
+                <div class="kpi-val green">{{ data.resolved_cases }}</div>
+            </td>
+            <td>
+                <span class="subtitle">Vrais Positifs (Pertinence)</span>
+                <div class="kpi-val blue">{{ data.true_positive_rate }}%</div>
+            </td>
+            <td>
+                <span class="subtitle">Faux Positifs (Bruit)</span>
+                <div class="kpi-val orange">{{ data.false_positive_rate }}%</div>
+            </td>
+        </tr>
+    </table>
+
+    <!-- SECTION 4 : TOP RÈGLES -->
+    {% if data.top_rules %}
+    <h3>4. Top 10 — Règles AIE les plus déclenchées</h3>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Règle AIE</th>
+                <th>Nombre d'occurrences</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for rule in data.top_rules %}
+            <tr>
+                <td style="width: 5%;">{{ loop.index }}</td>
+                <td>{{ rule.name }}</td>
+                <td style="width: 25%;"><b>{{ rule.count }}</b></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    <!-- SECTION 5 : ALERTES CRITIQUES -->
+    <h3>5. Alertes Critiques &amp; Élevées du Backlog</h3>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Règle AIE</th>
+                <th>Entité / Hôte</th>
+                <th>Classification</th>
+                <th>Sévérité</th>
+                <th>Date</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for alarm in data.critical_list %}
+            <tr>
+                <td>{{ alarm.alarmId }}</td>
+                <td>{{ alarm.alarmRuleName }}</td>
+                <td>{{ alarm.hostImpacted or alarm.entityName or 'N/A' }}</td>
+                <td>{{ alarm.classification or 'N/A' }}</td>
+                <td>
+                    {% if alarm.severityLabel == 'critical' %}
+                        <span class="badge badge-critical">CRITICAL</span>
+                    {% else %}
+                        <span class="badge badge-high">HIGH</span>
+                    {% endif %}
+                </td>
+                <td>{{ alarm.dateInserted[:19] if alarm.dateInserted else 'N/A' }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6" style="text-align: center;">Aucune alerte critique ou élevée dans le backlog sur la période.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+
+    </table>
+
+    <!-- SECTION RESUME DU PDF APRES LE DERNIER TABLEAU -->
+    <div class="summary-container">
+        <div class="summary-title">📈 Synthèse Analytique des Menaces &amp; Tendances</div>
+        
+        <div class="summary-card">
+            <div class="summary-item">
+                <span class="summary-label">Évolution Temporelle :</span>
+                {{ data.summaries.evolution }}
+            </div>
+            
+            <div class="summary-item">
+                <span class="summary-label">Top Sources d'Attaque &amp; Hôtes Impactés :</span>
+                {{ data.summaries.forensic }}
+            </div>
+
+            <div class="summary-item">
+                <span class="summary-label">Répartition des Intrusions &amp; Typologies :</span>
+                {{ data.summaries.intrusions }}
+            </div>
+
+            <div class="summary-item">
+                <span class="summary-label">Exploitations &amp; Vulnérabilités (CVE) :</span>
+                {{ data.summaries.cve }}
+            </div>
+
+            <div class="summary-item">
+                <span class="summary-label">Statuts &amp; Qualification SOC :</span>
+                {{ data.summaries.status }}
+            </div>
+        </div>
+    </div>
+</body>
+</html>

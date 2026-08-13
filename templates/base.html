@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>
+      {% block title %}Security Dashboard{% endblock %} — SOC LogRhythm
+    </title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700&family=Outfit:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/css/main.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/fr.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    />
+  </head>
+  <body>
+    <!-- ══ HEADER ══════════════════════════════════════════════════════════════ -->
+    <header class="header">
+      <div class="header-left">
+        <!--<div class="header-logo"><i class="fa-solid fa-shield-halved"></i></div>-->
+        <div class="header-logo">
+          <img
+            src="{{ url_for('static', filename='img/logo_airci.png') }}"
+            alt="Logo"
+          >
+        </div>
+        <div>
+          <h1 class="header-title">Security Dashboard</h1>
+          <p class="header-subtitle">SOC · LogRhythm SIEM</p>
+        </div>
+        <div class="header-meta">
+          <span id="lastUpdated" class="last-updated">—</span>
+        </div>
+      </div>
+
+      <nav class="header-tabs">
+        <a
+          href="/"
+          class="header-tab {% if active_tab == 'dashboard' %}active{% endif %}"
+        >
+          <i class="fa-solid fa-chart-line"></i> Dashboard
+        </a>
+        <a
+          href="/events"
+          class="header-tab {% if active_tab == 'events' %}active{% endif %}"
+        >
+          <i class="fa-solid fa-list"></i> Events
+        </a>
+        
+        <!-- Onglet affiché uniquement pour SuperAdmin et Admin -->
+        {% if current_user.role.value in ['SuperAdmin', 'Admin'] %}
+        <a
+          href="/users"
+          class="header-tab {% if active_tab == 'users' %}active{% endif %}"
+        >
+          <i class="fa-solid fa-users-gear"></i> Utilisateurs
+        </a>
+        {% endif %}
+      </nav>
+
+      <div class="header-right">
+        <div class="period-selector">
+          <span class="period-label">Période</span>
+          <button class="period-btn" data-days="7">7j</button>
+          <button class="period-btn" data-days="14">14j</button>
+          <button class="period-btn" data-days="30">30j</button>
+          <button class="period-btn" data-days="90">90j</button>
+        </div>
+
+        <div class="header-sep"></div>
+        <div class="date-range-wrapper" id="dateRangeWrapper">
+          <i
+            class="fa-regular fa-calendar"
+            style="color: var(--text-muted)"
+          ></i>
+          <input
+            type="text"
+            id="dateFrom"
+            class="date-input"
+            placeholder="Du"
+            readonly
+          />
+          <span class="date-arrow">→</span>
+          <input
+            type="text"
+            id="dateTo"
+            class="date-input"
+            placeholder="Au"
+            readonly
+          />
+          <button
+            class="btn-apply"
+            id="btnApply"
+            onclick="applyCustomRange()"
+            disabled
+          >
+            <i class="fa-solid fa-check"></i>
+          </button>
+          <button
+            class="btn-clear-range"
+            id="btnClearRange"
+            onclick="clearCustomRange()"
+            title="Effacer"
+            style="display: none"
+          >
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <button class="btn-refresh" id="btnRefresh" onclick="refreshData()">
+          <i class="fa-solid fa-rotate-right refresh-icon" id="refreshIcon"></i>
+          Actualiser
+        </button>
+
+        <button class="btn-refresh btn-pdf" onclick="downloadPdfReport()" title="Télécharger le rapport PDF">
+          <i class="fa-solid fa-file-pdf"></i> Exporter PDF
+        </button>
+
+        {% if current_user.is_authenticated %}
+        <div class="header-sep"></div>
+        <div class="user-profile">
+          <span class="user-profile-name">
+            <i class="fa-solid fa-user-circle"></i> {{ current_user.username }}
+          </span>
+          <a href="{{ url_for('auth.logout') }}" class="btn-logout" title="Se déconnecter">
+            <i class="fa-solid fa-right-from-bracket"></i>
+          </a>
+        </div>
+        {% endif %}
+
+        
+
+      </div>
+    </header>
+
+    <!-- ══ CONTENU PAGE ══════════════════════════════════════════════════════════ -->
+    {% block body %}{% endblock %}
+
+    <!-- ══ MODAL — Détail alarme (partagé par toutes les pages) ════════════════ -->
+    <div
+      id="alarmDetailOverlay"
+      class="alarm-overlay"
+      onclick="closeAlarmDetail()"
+    >
+      <div class="alarm-modal" onclick="event.stopPropagation()">
+        <div class="alarm-modal-header">
+          <div style="flex: 1; min-width: 0">
+            <div id="detailSevBadge" style="margin-bottom: 8px"></div>
+            <h3
+              id="detailRuleName"
+              style="
+                font-size: 14px;
+                font-weight: 600;
+                line-height: 1.4;
+                word-break: break-word;
+              "
+            ></h3>
+          </div>
+          <button
+            class="btn-modal-close"
+            onclick="closeAlarmDetail()"
+            title="Fermer (Échap)"
+          >
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <div class="alarm-modal-body">
+          <div class="detail-grid">
+            <div class="detail-item">
+              <span class="detail-label">ID Alarme</span
+              ><span class="detail-value" id="detailId"></span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Date</span
+              ><span class="detail-value" id="detailDate"></span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Classification</span
+              ><span class="detail-value" id="detailClassif"></span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Risk Rating</span
+              ><span class="detail-value" id="detailRR"></span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Entité</span
+              ><span class="detail-value" id="detailEntity"></span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Host Impacté</span
+              ><span class="detail-value" id="detailHost"></span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Statut</span
+              ><span class="detail-value" id="detailStatus"></span>
+            </div>
+
+            <div class="detail-item">
+              <span class="detail-label">Sévérité</span
+              ><span class="detail-value" id="detailSeverity"></span>
+            </div>
+
+            <div class="detail-item">
+                <span class="detail-label">Source Hosts</span>
+                <span id="ddSourceHosts" class="detail-value"></span>
+            </div>
+
+            <div class="detail-item">
+                <span class="detail-label">Destination Hosts</span>
+                <span id="ddDestHosts" class="detail-value"></span>
+            </div>
+
+            <div class="detail-item">
+              <span class="detail-label">Source IPs</span>
+              <span id="ddSourceIps" class="detail-value"></span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Destination IPs</span>
+              <span id="ddDestIps" class="detail-value"></span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Utilisateurs</span>
+              <span id="ddUsers" class="detail-value"></span>
+            </div>
+
+            <div class="detail-item">
+              <span class="detail-label">Événements déclencheurs</span
+              ><span 
+                id="ddEventCount" 
+                class="detail-value" 
+                style="font-weight: 700"
+              ></span>
+            </div>
+
+          </div>
+          <hr class="detail-sep" />
+          <div class="detail-rr-info" id="detailRRInfo">
+            <div class="detail-rr-row">
+              <span class="detail-label">Niveau</span
+              ><span class="detail-value" id="detailRRLevel"></span>
+            </div>
+            <div class="detail-rr-row">
+              <span class="detail-label">Signification</span
+              ><span class="detail-value" id="detailRRMeaning"></span>
+            </div>
+            <div class="detail-rr-row">
+              <span class="detail-label">Transfert événements</span
+              ><span class="detail-value" id="detailRRTransfer"></span>
+            </div>
+          </div>
+
+          
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ FOOTER ═══════════════════════════════════════════════════════════════ -->
+    <footer class="footer">
+      <span>SirDashboard — SOC LogRhythm</span>
+      <span>Rafraîchissement auto </span>
+      <span id="footerTime"></span>
+    </footer>
+
+    <!-- Modules JS communs (ordre requis) -->
+    <script src="/static/js/config.js"></script>
+    <script src="/static/js/helpers.js"></script>
+    <script src="/static/js/period.js"></script>
+    <script src="/static/js/modal.js"></script>
+    {% block scripts %}{% endblock %}
+  </body>
+</html>
+
+<!-- <div class="detail-action" id="detailAction">
+            <i id="detailActionIcon" class="fa-solid fa-bolt"></i>
+            <div>
+              <p class="detail-action-title" id="detailActionTitle"></p>
+              <p class="detail-action-desc" id="detailActionDesc"></p>
+            </div>
+          </div> -->
+
+          <!-- <hr class="detail-sep" /> -->
+<!-- 
+          <div id="drilldownSection">
+            <div class="drilldown-header">
+              <i class="fa-solid fa-magnifying-glass-chart"></i>
+              <span
+                >Événements associés —
+                <code style="font-size: 10px; opacity: 0.7"
+                  >/lr-alarm-api/alarms/{id}/events</code
+                ></span
+              >
+            </div>
+            <div id="drilldownLoading" class="drilldown-loading">
+              <i class="fa-solid fa-spinner fa-spin"></i> Chargement des
+              événements…
+            </div>
+            <div
+              id="drilldownData"
+              class="drilldown-grid"
+              style="display: none"
+            >
+              <div class="drilldown-item">
+                <span class="detail-label"
+                  ><i class="fa-solid fa-server" style="margin-right: 5px"></i
+                  >Source Hosts</span
+                >
+                <div id="ddSourceHostss" class="drilldown-chips"></div>
+              </div>
+
+              <div class="drilldown-item">
+                <span class="detail-label"
+                  ><i class="fa-solid fa-bullseye" style="margin-right: 5px"></i
+                  >Destination Hosts</span
+                >
+                <div id="ddDestHosts" class="drilldown-chips"></div>
+              </div>
+              <div class="drilldown-item">
+                <span class="detail-label"
+                  ><i
+                    class="fa-solid fa-network-wired"
+                    style="margin-right: 5px"
+                  ></i
+                  >Source IPs</span
+                >
+                <div id="ddSourceIps" class="drilldown-chips"></div>
+              </div>
+              <div class="drilldown-item">
+                <span class="detail-label"
+                  ><i
+                    class="fa-solid fa-arrow-right-to-bracket"
+                    style="margin-right: 5px"
+                  ></i
+                  >Destination IPs</span
+                >
+                <div id="ddDestIps" class="drilldown-chips"></div>
+              </div>
+              <div class="drilldown-item drilldown-item-full">
+                <span class="detail-label"
+                  ><i class="fa-solid fa-user" style="margin-right: 5px"></i
+                  >Utilisateurs</span
+                >
+                <div id="ddUsers" class="drilldown-chips"></div>
+              </div>
+              <div class="drilldown-item drilldown-item-full">
+                <span class="detail-label">Événements déclencheurs</span
+                ><span
+                  id="ddEventCount"
+                  class="detail-value"
+                  style="font-weight: 700"
+                ></span>
+              </div>
+
+            </div>
+            <div
+              id="drilldownError"
+              class="drilldown-error"
+              style="display: none"
+            >
+              <i class="fa-solid fa-circle-info"></i> Données non disponibles
+              pour cette alarme
+            </div>
+          </div>
+           -->

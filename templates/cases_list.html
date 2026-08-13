@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}Liste des Cases{% endblock %}
+
+{% block body %}
+<main class="main" style="padding: 20px; display: block;">
+    
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h1 style="color: #fff; font-size: 22px; margin: 0;">
+            <i class="fa-solid fa-briefcase" style="color: var(--blue); margin-right: 10px;"></i> 
+            Gestion des Dossiers d'Incidents (Cases)
+        </h1>
+        <span id="totalCasesBadge" style="background: var(--blue); color: #fff; padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: bold;">
+            0 Dossiers au total
+        </span>
+    </div>
+
+    <div class="chart-card">
+        <div class="table-wrapper" style="padding: 10px;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>N° ID</th>
+                        <th>Priorité</th>
+                        <th>Nom du Case / Incident</th>
+                        <th>Statut</th>
+                        <th>Analyste Assigné</th>
+                        <th style="text-align: center;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="casesBody">
+                    <tr>
+                        <td colspan="6" style="text-align:center; padding:20px; color:var(--text-muted);">
+                            Initialisation...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
+
+<div id="caseModalOverlay" style="display: none;">
+    <div id="caseModalContainer" style="position: relative; background: #0e1522; border: 1px solid #1e293b; border-radius: 8px; width: 90%; max-width: 1000px; max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.6); display: flex; flex-direction: column;">
+        <div style="text-align: right; padding: 15px; background: #0e1522; border-bottom: 1px solid #1e293b;">
+            <button onclick="closeCaseModal()" style="background: #1e293b; border: 1px solid #334155; color: #fff; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 14px;">
+                <i class="fa-solid fa-xmark"></i> Fermer
+            </button>
+        </div>
+        <div id="caseModalContent" style="padding: 20px; color: #fff;"></div>
+    </div>
+</div>
+
+<style>
+.prio-tag { padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 11px; display: inline-block; }
+.prio-1 { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+.prio-2 { background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.3); }
+.prio-3 { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+.prio-4 { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+.btn-action { background: #1e293b; color: #fff; border: 1px solid #334155; padding: 6px 14px; border-radius: 4px; cursor: pointer; transition: background 0.2s; font-size: 12px; }
+.btn-action:hover { background: #3182ce; border-color: #3182ce; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let _allCases = [];
+
+// 1. On intercepte les dates envoyées par le sélecteur de période
+function _loadPageData(days, dateFrom, dateTo) {
+    // On transmet proprement les filtres à notre fonction de chargement
+    loadCases(days, dateFrom, dateTo);
+}
+
+// Fonction de rafraîchissement manuel (bouton actualiser)
+function refreshData() {
+    // Si period.js fournit des fonctions globales pour récupérer la période actuelle, 
+    // on les utilise, sinon on appelle à vide pour charger la période par défaut
+    if (typeof currentPeriod === 'function') {
+        const p = currentPeriod();
+        loadCases(p.days, p.dateFrom, p.dateTo);
+    } else {
+        loadCases();
+    }
+}
+
+// 2. On met à jour loadCases pour qu'elle accepte et utilise les dates
+function loadCases(days, dateFrom, dateTo) {
+    const tbody = document.getElementById('casesBody');
+    const totalBadge = document.getElementById('totalCasesBadge');
+    
+    if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-muted);">
+            <i class="fa-solid fa-spinner fa-spin"></i> Récupération des dossiers LogRhythm...
+        </td></tr>`;
+    }
+
+    // ON CONSTRUIT L'URL EN LUI PASSANT LES PARAMÈTRES REÇUS
+    // buildApiUrl va automatiquement ajouter ?days=... ou ?date_from=...&date_to=...
+    const url = buildApiUrl('/api/metrics', { days, dateFrom, dateTo });
+    
+    console.log("🔗 URL appelée pour les Cases :", url); // Pour vérifier dans la console F12
+
+    fetch(url)
+        .then(response => { if (!response.ok) throw new Error(response.status); return response.json(); })
+        .then(data => {
+            _allCases = data.cases_list || [];
+            if (totalBadge) totalBadge.textContent = `${_allCases.length} Dossiers au total`;
+            if (!tbody) return;
+
+            if (_allCases.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="color:var(--text-muted); text-align:center; padding:20px;">Aucun dossier trouvé pour cette période.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = _allCases.map(c => {
+                const statusName = (c.status && typeof c.status === 'object') ? c.status.name : (c.status || 'Inconnu');
+                const ownerName = (c.owner && typeof c.owner === 'object') ? c.owner.name : (c.owner || 'Non assigné');
+                return `
+                <tr>
+                    <td><code>#${c.number || '—'}</code></td>
+                    <td><span class="prio-tag prio-${c.priority}">P${c.priority || '?'}</span></td>
+                    <td><b style="color: #e2e8f0;">${escHtml(c.name || 'Sans titre')}</b></td>
+                    <td><span style="color: #60a5fa;">${escHtml(statusName)}</span></td>
+                    <td>${escHtml(ownerName)}</td>
+                    <td style="text-align: center;">
+                        <button class="btn-action" onclick="event.stopPropagation(); openCaseModal('${c.id}')">
+                            <i class="fa-solid fa-eye"></i> Voir Détails
+                        </button>
+                    </td>
+                </tr>`;
+            }).join('');
+        })
+        .catch(err => {
+            if (tbody) {
+                tbody.innerHTML = `<tr><td colspan="6" style="color:var(--red); text-align:center; padding:24px">Erreur : ${err.message}</td></tr>`;
+            }
+        });
+}
+
+function openCaseModal(caseId) {
+    if (window._loadingCaseModal) return;
+    window._loadingCaseModal = true;
+
+    console.log("1. Clic sécurisé détecté pour le Case ID :", caseId);
+    
+    const overlay = document.getElementById('caseModalOverlay');
+    const content = document.getElementById('caseModalContent');
+    
+    if (!overlay) {
+        console.error("❌ Erreur : L'élément #caseModalOverlay n'existe pas dans cette page !");
+        window._loadingCaseModal = false;
+        return;
+    }
+
+    // ── FORCAGE CSS VISUEL ABSOLU EN JAVASCRIPT ──
+    overlay.style.setProperty('display', 'flex', 'important');
+    overlay.style.setProperty('position', 'fixed', 'important');
+    overlay.style.setProperty('top', '0', 'important');
+    overlay.style.setProperty('left', '0', 'important');
+    overlay.style.setProperty('width', '100vw', 'important');
+    overlay.style.setProperty('height', '100vh', 'important');
+    overlay.style.setProperty('background-color', 'rgba(4, 7, 13, 0.95)', 'important');
+    overlay.style.setProperty('z-index', '999999', 'important');
+    overlay.style.setProperty('align-items', 'center', 'important');
+    overlay.style.setProperty('justify-content', 'center', 'important');
+
+    content.innerHTML = `
+        <div style="padding: 40px; text-align: center; color: #cbd5e1;">
+            <i class="fa-solid fa-spinner fa-spin fa-2x" style="color: #3182ce; margin-bottom: 15px;"></i>
+            <p style="margin: 0;">Interrogation de la base LogRhythm...</p>
+        </div>
+    `;
+
+    fetch(`/case/${caseId}`)
+        .then(response => { 
+            if (!response.ok) throw new Error(`Erreur HTTP : ${response.status}`); 
+            return response.text(); 
+        })
+        .then(html => {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const mainContent = doc.querySelector('main') || doc.querySelector('.main') || doc.querySelector('.container');
+            
+            if (mainContent) {
+                mainContent.style.padding = '0px';
+                mainContent.style.background = 'transparent';
+                
+                const backLink = mainContent.querySelector('a[href="/"]');
+                if (backLink) backLink.remove();
+                
+                content.innerHTML = mainContent.outerHTML;
+            } else {
+                content.innerHTML = html;
+            }
+            console.log("2. HTML injecté visuellement avec succès.");
+        })
+        .catch(err => {
+            console.error("❌ Erreur pendant le fetch :", err);
+            content.innerHTML = `<div style="padding: 30px; color: #f87171; text-align:center;">Erreur : ${err.message}</div>`;
+        })
+        .finally(() => {
+            window._loadingCaseModal = false;
+        });
+}
+
+function closeCaseModal() {
+    const overlay = document.getElementById('caseModalOverlay');
+    if (overlay) {
+        overlay.style.setProperty('display', 'none', 'important');
+    }
+}
+
+function escHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeCaseModal();
+});
+</script>
+{% endblock %}

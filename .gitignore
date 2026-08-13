@@ -1,0 +1,15 @@
+# Ne jamais committer les credentials
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+logs/
+
+# Données exportées
+dashboard_data.json

@@ -1,0 +1,11 @@
+# Gunicorn — SirDashboard (écoute locale, Apache fait le reverse proxy)
+bind = "127.0.0.1:8000"
+workers = 3
+threads = 2
+timeout = 180
+graceful_timeout = 30
+keepalive = 5
+accesslog = "-"
+errorlog = "-"
+capture_output = True
+umask = 0o027

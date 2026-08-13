@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% set active_tab = "events" %}
+{% block title %}Events{% endblock %}
+
+{% block body %}
+<main class="main events-main" id="mainContent">
+
+  <!-- ── Barre de filtres ──────────────────────────────────────────────────── -->
+  <div class="events-toolbar">
+
+    <div class="events-sev-tabs" id="evSevTabs">
+      <button class="ev-sev-tab" data-severity="all">
+        <i class="fa-solid fa-list"></i> Toutes
+        <span class="ev-sev-count" id="evCount-all"></span>
+      </button>
+      <button class="ev-sev-tab" data-severity="critical">
+        <i class="fa-solid fa-circle-exclamation"></i> Critical
+        <span class="ev-sev-count" id="evCount-critical"></span>
+      </button>
+      <button class="ev-sev-tab" data-severity="high">
+        <i class="fa-solid fa-triangle-exclamation"></i> High
+        <span class="ev-sev-count" id="evCount-high"></span>
+      </button>
+      <button class="ev-sev-tab" data-severity="medium">
+        <i class="fa-solid fa-circle-half-stroke"></i> Medium
+        <span class="ev-sev-count" id="evCount-medium"></span>
+      </button>
+      <button class="ev-sev-tab" data-severity="low">
+        <i class="fa-solid fa-circle"></i> Low
+        <span class="ev-sev-count" id="evCount-low"></span>
+      </button>
+      <button class="ev-sev-tab ev-sev-intrusion" data-severity="intrusion_crit">
+        <i class="fa-solid fa-skull-crossbones"></i> Intrusion Crit <span class="ev-sev-count" id="evCount-intrusion_crit"></span>
+      </button>
+      <button class="ev-sev-tab ev-sev-intrusion" data-severity="intrusion_high">
+        <i class="fa-solid fa-hand-fist"></i> Intrusion High <span class="ev-sev-count" id="evCount-intrusion_high"></span>
+      </button>
+    </div>
+
+    <div class="events-search-wrap">
+      <i class="fa-solid fa-magnifying-glass" style="color:var(--text-muted)"></i>
+      <input type="text" id="evSearchInput" class="events-search-input"
+             placeholder="Filtrer par règle, entité, host, classification…"/>
+      <button class="ev-search-clear" id="evSearchClear" style="display:none" onclick="clearSearch()">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <div class="events-info">
+      <span id="evResultCount" class="events-result-count">—</span>
+    </div>
+
+  </div>
+
+  <!-- ── Loader Events ─────────────────────────────────────────────────────── -->
+  <div id="evLoader" class="ev-loader" style="display:none">
+    <i class="fa-solid fa-spinner fa-spin"></i>
+    <span>Chargement des alarmes…</span>
+  </div>
+
+  <!-- ── Table ─────────────────────────────────────────────────────────────── -->
+  <section class="table-section events-table-section">
+    <div class="table-wrapper">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Règle AIE</th>
+            <th>Entité</th>
+            
+            <th>Classification</th>
+            <th>RR</th>
+            <th>Statut</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody id="eventsBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── Pagination ─────────────────────────────────────────────────────────── -->
+  <div class="events-pagination" id="evPagination">
+    <button class="ev-page-btn" id="evPrevBtn" onclick="changePage(-1)" disabled>
+      <i class="fa-solid fa-chevron-left"></i> Précédent
+    </button>
+    <span id="evPageInfo" class="ev-page-info">Page 1</span>
+    <button class="ev-page-btn" id="evNextBtn" onclick="changePage(1)">
+      Suivant <i class="fa-solid fa-chevron-right"></i>
+    </button>
+  </div>
+
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/events.js"></script>
+{% endblock %}

@@ -1,0 +1,702 @@
+"""
+LogRhythm API client — Phase 1 SOC Dashboard
+Collecte et calcul des métriques depuis l'API LogRhythm.
+Référentiel de classifications : LogRhythm_Classifications_Securite.docx v7.23.0
+"""
+
+import os
+import requests
+import urllib3
+import json
+import base64
+from datetime import datetime, timezone
+from collections import Counter, defaultdict
+from dotenv import load_dotenv
+
+load_dotenv()
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# ── Configuration (chargée depuis .env) ───────────────────────────────────────
+BASE_URL = os.getenv("LR_BASE_URL", "https://172.20.200.4:8501")
+CLIENT_ID = os.getenv("LR_CLIENT_ID", "")
+CLIENT_SECRET = os.getenv("LR_CLIENT_SECRET", "")
+_FALLBACK_TOKEN = os.getenv("LR_FALLBACK_TOKEN", "")
+_token_cache = {"token": None, "exp": 0}
+
+# ── Statuts alarme (entier → texte) ──────────────────────────────────────────
+ALARM_STATUS = {
+    0: "New",
+    1: "Open",
+    2: "Open: Working",
+    3: "Open: Escalated",
+    4: "Closed: False Alarm",
+    5: "Closed: Resolved",
+    6: "Closed: Unresolved",
+    7: "Closed: Reported",
+    8: "Closed: Monitor",
+}
+
+# Groupes de statuts pour les KPIs
+BACKLOG_STATUSES = {0, 1, 2, 3}  # alertes non traitées
+FALSE_POS_STATUSES = {4}  # faux positifs
+TRUE_POS_STATUSES = {5, 7}  # vraies alertes (résolu / rapporté)
+
+# ── Référentiel des 14 classifications LogRhythm (v7.23.0) ───────────────────
+# Format : { "Classification": risk_rating }
+LR_CLASSIFICATIONS = {
+    "Compromise": 9,  # Compromission confirmée — RR critique
+    "Attack": 8,  # Attaque présumée réussie — RR élevé
+    "Denial of Service": 8,  # DoS/DDoS présumé réussi — RR élevé
+    "Malware": 9,  # Malware actif (trojan, worm, etc.) — RR critique
+    "Suspicious": 6,  # Activité suspecte non confirmée — RR moyen-haut
+    "Reconnaissance": 4,  # Scan / enumération réseau — RR faible
+    "Misuse": 5,  # Mauvais usage (P2P, webmail, etc.) — RR moyen
+    "Activity": 0,  # Activité générale sans caractère malveillant
+    "Failed Attack": 0,  # Attaque bloquée par les mesures de prévention
+    "Failed Denial of Service": 0,  # DoS bloqué
+    "Failed Malware": 0,  # Malware bloqué
+    "Failed Suspicious": 0,  # Activité suspecte bloquée
+    "Failed Activity": 0,  # Activité générale bloquée
+    "Other Security": 0,  # Activité non classifiable
+}
+
+# Seuils de sévérité (Risk Rating — référentiel v7.23.0)
+RR_CRITICAL = 9   # Compromise, Malware → intervention immédiate
+RR_HIGH     = 8   # Attack, Denial of Service → escalade prioritaire
+# Classifications qui comptent comme tentative d'intrusion
+INTRUSION_CLASSIFICATIONS = {"Compromise", "Attack", "Denial of Service", "Malware"}
+# ── Mots-clés de fallback (quand le champ 'classification' est absent de l'API) ──
+CLASSIFICATION_KEYWORDS = {
+    "Compromise": [
+        "compromise",
+        "privilege escalat",
+        "unauthorized access",
+        "takeover",
+        "control flow",
+        "config modif",
+        "apt:",
+    ],
+    "Attack": [
+        "buffer overflow",
+        "sql injection",
+        "session hijack",
+        "exploit",
+        "brute force",
+        "password spray",
+        "auth fail",
+        "logon fail",
+        "forceful brows",
+        "injection",
+        "rce",
+        "cve-",
+        "shellcode",
+    ],
+    "Denial of Service": [
+        "denial of service",
+        "dos",
+        "ddos",
+        "synflood",
+        "ping of death",
+        "win nuke",
+        "teardrop",
+        "resource starvation",
+        "spam flood",
+    ],
+    "Malware": [
+        "malware",
+        "ransomware",
+        "trojan",
+        "backdoor",
+        "worm",
+        "virus",
+        "spyware",
+        "rootkit",
+    ],
+    "Suspicious": [
+        "suspicious",
+        "suspect",
+        "anomal",
+        "default account",
+        "multiple fail",
+        "unusual",
+        "abnormal payload",
+    ],
+    "Reconnaissance": [
+        "scan",
+        "recon",
+        "probe",
+        "enumeration",
+        "discovery",
+        "sweep",
+        "nmap",
+        "port scan",
+        "web crawl",
+        "crawling",
+    ],
+    "Misuse": [
+        "webmail",
+        "p2p",
+        "peer-to-peer",
+        "pornograph",
+        "policy violation",
+        "misuse",
+        "unauthorized program",
+    ],
+    "Failed Attack": [
+        "failed attack",
+        "blocked attack",
+        "dropped attack",
+    ],
+    "Failed Denial of Service": [
+        "failed dos",
+        "blocked dos",
+        "prevented dos",
+        "prevented ddos",
+    ],
+    "Failed Malware": [
+        "failed malware",
+        "blocked malware",
+        "blocked trojan",
+        "blocked worm",
+    ],
+    "Failed Suspicious": [
+        "failed suspicious",
+        "blocked suspicious",
+        "blocked hotmail",
+    ],
+    "Failed Activity": [
+        "failed activity",
+        "drop p2p",
+        "ftp refused",
+    ],
+}
+
+# ── Fonctions de classification ───────────────────────────────────────────────
+def classify_alarm(alarm: dict) -> tuple:
+    """
+    Retourne (classification: str, risk_rating: int).
+    1. Utilise le champ natif 'classification' de l'API LogRhythm si présent.
+    2. Sinon, fallback sur les mots-clés dans le nom de règle.
+    """
+    # 1. Champ natif LogRhythm
+    native = alarm.get("classification", "")
+    if native and native in LR_CLASSIFICATIONS:
+        return native, LR_CLASSIFICATIONS[native]
+
+    # 2. Fallback mots-clés
+    rule = alarm.get("alarmRuleName", "").lower()
+    for classification, keywords in CLASSIFICATION_KEYWORDS.items():
+        if any(kw in rule for kw in keywords):
+            return classification, LR_CLASSIFICATIONS[classification]
+
+    return "Other Security", 0
+
+def get_severity(rr: int) -> str | None:
+    """Retourne 'critical' (RR9), 'high' (RR8), ou None pour les RR inférieurs."""
+    if rr >= RR_CRITICAL:
+        return "critical"
+    if rr >= RR_HIGH:
+        return "high"
+    return None
+
+
+# ── Authentification ──────────────────────────────────────────────────────────
+def _get_token() -> str:
+    now = datetime.now(timezone.utc).timestamp()
+    if _token_cache["token"] and _token_cache["exp"] - now > 60:
+        return _token_cache["token"]
+    try:
+        resp = requests.post(
+            f"{BASE_URL}/lr-auth-api/tokens",
+            json={"clientId": CLIENT_ID, "clientSecret": CLIENT_SECRET},
+            headers={"content-type": "application/json"},
+            verify=False,
+            timeout=10,
+        )
+        if resp.status_code in (200, 201):
+            data = resp.json()
+            token = (
+                data.get("bearerToken") or data.get("token") or data.get("access_token")
+            )
+            if token:
+                try:
+                    pb64 = token.split(".")[1]
+                    pb64 += "=" * (-len(pb64) % 4)
+                    exp = json.loads(base64.b64decode(pb64)).get("exp", now + 3600)
+                except Exception:
+                    exp = now + 3600
+                _token_cache.update({"token": token, "exp": exp})
+                return token
+    except Exception:
+        pass
+    _token_cache.update({"token": _FALLBACK_TOKEN, "exp": 1775147830})
+    return _FALLBACK_TOKEN
+
+
+def _headers() -> dict:
+    return {"accept": "application/json", "authorization": f"Bearer {_get_token()}"}
+
+
+# ── Appels API bruts ──────────────────────────────────────────────────────────
+def _get(path: str, params: dict = None):
+    try:
+        resp = requests.get(
+            f"{BASE_URL}{path}",
+            params=params,
+            headers=_headers(),
+            verify=False,
+            timeout=15,
+        )
+        return resp.json() if resp.status_code == 200 else None
+    except Exception:
+        return None
+
+
+def fetch_alarms(date_from: str, date_to: str, limit: int | None = None) -> list:
+    """
+    Récupère les alarmes par pages de 500 jusqu'à tout avoir (limit=None)
+    ou jusqu'à atteindre `limit` alarmes.
+    """
+    BATCH = 500
+    collected = []
+    offset = 0
+
+    while True:
+        page_size = min(BATCH, limit - len(collected)) if limit else BATCH
+
+        data = _get(
+            "/lr-alarm-api/alarms",
+            {
+                "count":        page_size,
+                "offset":       offset,
+                "orderby":      "DateInserted",
+                "dir":          "descending",
+                "dateInserted": date_from,
+            },
+        )
+        if not data:
+            break
+
+        page = [
+            a for a in data.get("alarmsSearchDetails", [])
+            if a.get("dateInserted", "") <= date_to
+        ]
+        if not page:
+            break
+
+        collected.extend(page)
+
+        if (limit and len(collected) >= limit) or len(page) < page_size:
+            break
+
+        offset += page_size
+
+    return collected[:limit] if limit else collected
+
+
+def fetch_drilldown(alarm_id: int) -> dict:
+    """
+    Appelle /lr-alarm-api/alarms/{alarmId}/events et extrait
+    les hôtes, IPs et utilisateurs impliqués dans l'alarme.
+    Retourne un dict vide si l'API ne répond pas.
+    """
+    data = _get(f"/lr-alarm-api/alarms/{alarm_id}/events")
+    if not data:
+        return {}
+
+    # La réponse est encapsulée sous "alarmEventsDetails"
+    events = (
+        data.get("alarmEventsDetails")
+        or data.get("events")
+        or data.get("alarmEvents")
+        or (data if isinstance(data, list) else [])
+    )
+
+    source_hosts: set = set()
+    dest_hosts:   set = set()
+    source_ips:   set = set()
+    dest_ips:     set = set()
+    users:        set = set()
+
+    _EMPTY = {"-", "N/A", "n/a", "none", "None", ""}
+
+    for evt in events:
+        if not isinstance(evt, dict):
+            continue
+        for fld in ("sourceHostName", "logSourceHostName", "originHostName"):
+            v = evt.get(fld)
+            if v and v not in _EMPTY:
+                source_hosts.add(v)
+                break
+        for fld in ("destinationHostName", "impactedHostName", "destHostName"):
+            v = evt.get(fld)
+            if v and v not in _EMPTY:
+                dest_hosts.add(v)
+                break
+        for fld in ("sourceIp", "sourceIPAddress", "originIp", "srcIp"):
+            v = evt.get(fld)
+            if v and v not in _EMPTY:
+                source_ips.add(v)
+                break
+        for fld in ("destinationIp", "destIp", "impactedIp", "dstIp", "destinationIPAddress"):
+            v = evt.get(fld)
+            if v and v not in _EMPTY:
+                dest_ips.add(v)
+                break
+        for fld in ("userName", "user", "account", "login", "subject"):
+            v = evt.get(fld)
+            if v and v not in _EMPTY:
+                users.add(v)
+                break
+
+    return {
+        "sourceHosts": sorted(source_hosts)[:5],
+        "destHosts":   sorted(dest_hosts)[:5],
+        "sourceIps":   sorted(source_ips)[:5],
+        "destIps":     sorted(dest_ips)[:5],
+        "users":       sorted(users)[:5],
+        "eventCount":  len(events),
+    }
+
+def _extract_drilldown_from_events(events: list) -> dict:
+    """Extrait hosts/IPs/users depuis une liste d'events déjà chargés (mode local)."""
+    source_hosts: set = set()
+    dest_hosts:   set = set()
+    source_ips:   set = set()
+    dest_ips:     set = set()
+    users:        set = set()
+    _EMPTY = {"-", "N/A", "n/a", "none", "None", ""}
+
+    for evt in events:
+        if not isinstance(evt, dict):
+            continue
+        for fld in ("sourceHostName", "logSourceHostName", "originHostName"):
+            v = evt.get(fld)
+            if v and v not in _EMPTY:
+                source_hosts.add(v); break
+        for fld in ("destinationHostName", "impactedHostName", "destHostName"):
+            v = evt.get(fld)
+            if v and v not in _EMPTY:
+                dest_hosts.add(v); break
+        for fld in ("sourceIp", "sourceIPAddress", "originIp", "srcIp"):
+            v = evt.get(fld)
+            if v and v not in _EMPTY:
+                source_ips.add(v); break
+        for fld in ("destinationIp", "destIp", "impactedIp", "dstIp", "destinationIPAddress"):
+            v = evt.get(fld)
+            if v and v not in _EMPTY:
+                dest_ips.add(v); break
+        for fld in ("userName", "user", "account", "login", "subject"):
+            v = evt.get(fld)
+            if v and v not in _EMPTY:
+                users.add(v); break
+
+    return {
+        "sourceHosts": sorted(source_hosts)[:5],
+        "destHosts":   sorted(dest_hosts)[:5],
+        "sourceIps":   sorted(source_ips)[:5],
+        "destIps":     sorted(dest_ips)[:5],
+        "users":       sorted(users)[:5],
+        "eventCount":  len(events),
+    }
+
+
+def compute_metrics_from_file(filepath: str) -> tuple[dict, dict]:
+    """
+    Mode local — charge un fichier JSON exporté par export_alarms.py.
+    Retourne (metrics_dict, drilldown_index) où drilldown_index est
+    un dict {alarm_id: drilldown_data} pour les appels /api/drilldown.
+    """
+    import json as _json
+    with open(filepath, encoding="utf-8") as f:
+        export = _json.load(f)
+
+    date_from = export.get("date_from", "")
+    date_to   = export.get("date_to",   "")
+
+    # Reconstitue les listes brutes pour réutiliser la logique existante
+    alarms_raw = [item["alarm"]  for item in export.get("alarms", [])]
+    events_map = {
+        item["alarm"].get("alarmId"): item.get("events", [])
+        for item in export.get("alarms", [])
+    }
+
+    # Calcul identique à compute_metrics()
+    total           = len(alarms_raw)
+    backlog_count   = 0
+    false_pos_count = 0
+    true_pos_count  = 0
+    critical_count  = 0
+    high_count      = 0
+    intrusion_count = 0
+
+    status_counts  = Counter()
+    entity_counts  = Counter()
+    rule_counts    = Counter()
+    classif_counts = Counter()
+    daily_counts   = defaultdict(int)
+    daily_crit     = defaultdict(int)
+    daily_high     = defaultdict(int)
+    daily_medium   = defaultdict(int)
+    daily_low      = defaultdict(int)
+    entity_daily: dict = defaultdict(lambda: defaultdict(int))
+    critical_list  = []
+
+    for alarm in alarms_raw:
+        status_int = alarm.get("alarmStatus", -1)
+        status_lbl = ALARM_STATUS.get(status_int, f"Inconnu ({status_int})")
+        rule_name  = alarm.get("alarmRuleName", "Unknown")
+        entity     = alarm.get("entityName", "Unknown")
+        date_ins   = alarm.get("dateInserted", "")
+        classification, rr = classify_alarm(alarm)
+
+        status_counts[status_lbl]      += 1
+        entity_counts[entity]          += 1
+        rule_counts[rule_name]         += 1
+        classif_counts[classification] += 1
+
+        if date_ins:
+            day = date_ins[:10]
+            daily_counts[day] += 1
+            entity_daily[entity][day] += 1
+            if rr >= 9:   daily_crit[day]   += 1
+            elif rr >= 8: daily_high[day]   += 1
+            elif rr >= 5: daily_medium[day] += 1
+            else:         daily_low[day]    += 1
+
+        if status_int in BACKLOG_STATUSES:   backlog_count   += 1
+        if status_int in FALSE_POS_STATUSES: false_pos_count += 1
+        if status_int in TRUE_POS_STATUSES:  true_pos_count  += 1
+
+        severity = get_severity(rr)
+        if severity and status_int in BACKLOG_STATUSES:
+            if severity == "critical": critical_count += 1
+            else:                      high_count     += 1
+            if len(critical_list) < 20:
+                host = (alarm.get("impactedHostName") or alarm.get("hostName")
+                        or alarm.get("sourceHostName") or alarm.get("hostImpacted") or "")
+                critical_list.append({
+                    "alarmId":        alarm.get("alarmId"),
+                    "alarmRuleName":  rule_name,
+                    "alarmStatus":    status_lbl,
+                    "entityName":     entity,
+                    "hostImpacted":   host,
+                    "dateInserted":   date_ins,
+                    "classification": classification,
+                    "riskRating":     rr,
+                    "severity":       severity,
+                })
+
+        if classification in INTRUSION_CLASSIFICATIONS:
+            intrusion_count += 1
+
+    fp_rate = round(false_pos_count / total * 100, 1) if total else 0
+    tp_rate = round(true_pos_count  / total * 100, 1) if total else 0
+    sorted_days = sorted(daily_counts)
+
+    metrics = {
+        "total_alarms":        total,
+        "critical_alarms":     critical_count,
+        "high_alarms":         high_count,
+        "backlog":             backlog_count,
+        "false_positive_rate": fp_rate,
+        "true_positive_rate":  tp_rate,
+        "intrusion_attempts":  intrusion_count,
+        "by_status":           dict(status_counts.most_common()),
+        "top_entities":        dict(entity_counts.most_common(10)),
+        "top_rules":           dict(rule_counts.most_common(10)),
+        "classifications":     dict(classif_counts.most_common()),
+        "daily_labels":        sorted_days,
+        "daily_counts":        [daily_counts[d] for d in sorted_days],
+        "daily_by_severity": {
+            "Critical": [daily_crit.get(d, 0)   for d in sorted_days],
+            "High":     [daily_high.get(d, 0)    for d in sorted_days],
+            "Medium":   [daily_medium.get(d, 0)  for d in sorted_days],
+            "Low":      [daily_low.get(d, 0)      for d in sorted_days],
+        },
+        "daily_by_entity": {
+            entity: [entity_daily[entity].get(d, 0) for d in sorted_days]
+            for entity, _ in entity_counts.most_common(5)
+        },
+        "critical_list":   critical_list,
+        "total_cases":     0,
+        "cases_by_priority": {},
+        "cases_by_status":   {},
+        "date_from":       date_from,
+        "date_to":         date_to,
+        "last_updated":    export.get("exported_at", ""),
+        "local_mode":      True,
+        "local_file":      os.path.basename(filepath),
+    }
+
+    # Index de drilldown {alarm_id: drilldown_dict}
+    drilldown_index = {
+        alarm_id: _extract_drilldown_from_events(events)
+        for alarm_id, events in events_map.items()
+    }
+
+    return metrics, drilldown_index
+
+
+def fetch_cases(date_from: str, date_to: str, count: int = 500) -> list:
+    data = _get(
+        "/lr-case-api/cases",
+        {
+            "count": count,
+            "offset": 0,
+            "orderBy": "dateCreated",
+            "direction": "desc",
+            "createdAfter": date_from,
+            "createdBefore": date_to,
+        },
+    )
+    if not data:
+        return []
+    return data if isinstance(data, list) else data.get("cases", [])
+
+
+# ── Calcul des métriques dashboard ───────────────────────────────────────────
+def compute_metrics(date_from: str, date_to: str) -> dict:
+    alarms = fetch_alarms(date_from, date_to)
+    cases = fetch_cases(date_from, date_to)
+
+    total = len(alarms)
+    backlog_count   = 0
+    false_pos_count = 0
+    true_pos_count  = 0
+    critical_count  = 0   # RR 9 — Compromise / Malware
+    high_count      = 0   # RR 8 — Attack / Denial of Service
+    intrusion_count = 0
+
+    status_counts  = Counter()
+    entity_counts  = Counter()
+    rule_counts    = Counter()
+    classif_counts = Counter()
+    daily_counts   = defaultdict(int)
+    daily_crit     = defaultdict(int)   # RR >= 9
+    daily_high     = defaultdict(int)   # RR == 8
+    daily_medium   = defaultdict(int)   # 5 <= RR <= 7
+    daily_low      = defaultdict(int)   # RR < 5
+    entity_daily: dict = defaultdict(lambda: defaultdict(int))
+    critical_list  = []   # inclut RR 9 et RR 8 en backlog
+
+    for alarm in alarms:
+        status_int = alarm.get("alarmStatus", -1)
+        status_lbl = ALARM_STATUS.get(status_int, f"Inconnu ({status_int})")
+        rule_name  = alarm.get("alarmRuleName", "Unknown")
+        entity     = alarm.get("entityName", "Unknown")
+        date_ins   = alarm.get("dateInserted", "")
+        classification, rr = classify_alarm(alarm)
+
+        status_counts[status_lbl]      += 1
+        entity_counts[entity]          += 1
+        rule_counts[rule_name]         += 1
+        classif_counts[classification] += 1
+
+        if date_ins:
+            day = date_ins[:10]
+            daily_counts[day] += 1
+            entity_daily[entity][day] += 1
+            if rr >= 9:
+                daily_crit[day] += 1
+            elif rr >= 8:
+                daily_high[day] += 1
+            elif rr >= 5:
+                daily_medium[day] += 1
+            else:
+                daily_low[day] += 1
+
+        if status_int in BACKLOG_STATUSES:
+            backlog_count += 1
+        if status_int in FALSE_POS_STATUSES:
+            false_pos_count += 1
+        if status_int in TRUE_POS_STATUSES:
+            true_pos_count += 1
+
+        severity = get_severity(rr)
+        if severity and status_int in BACKLOG_STATUSES:
+            if severity == "critical":
+                critical_count += 1
+            else:
+                high_count += 1
+            if len(critical_list) < 20:
+                # Tente plusieurs noms de champ possibles pour le host impacté
+                host = (
+                    alarm.get("impactedHostName")
+                    or alarm.get("hostName")
+                    or alarm.get("sourceHostName")
+                    or alarm.get("destinationHostName")
+                    or alarm.get("impactedHost")
+                    or alarm.get("hostImpacted")
+                    or ""
+                )
+                critical_list.append(
+                    {
+                        "alarmId":        alarm.get("alarmId"),
+                        "alarmRuleName":  rule_name,
+                        "alarmStatus":    status_lbl,
+                        "entityName":     entity,
+                        "hostImpacted":   host,
+                        "dateInserted":   date_ins,
+                        "classification": classification,
+                        "riskRating":     rr,
+                        "severity":       severity,
+                    }
+                )
+
+        if classification in INTRUSION_CLASSIFICATIONS:
+            intrusion_count += 1
+
+    fp_rate = round(false_pos_count / total * 100, 1) if total else 0
+    tp_rate = round(true_pos_count / total * 100, 1) if total else 0
+    case_priority = Counter()
+    case_status = Counter()
+    for case in cases:
+        p = str(case.get("priority", "?"))
+        case_priority[p] += 1
+        s = case.get("status", {})
+        s_name = s.get("name", "?") if isinstance(s, dict) else str(s)
+        case_status[s_name] += 1
+
+    sorted_days = sorted(daily_counts)
+
+    return {
+        # KPIs
+        "total_alarms":        total,
+        "critical_alarms":     critical_count,   # RR 9 — Compromise / Malware
+        "high_alarms":         high_count,        # RR 8 — Attack / Denial of Service
+        "backlog":             backlog_count,
+        "false_positive_rate": fp_rate,
+        "true_positive_rate":  tp_rate,
+        "intrusion_attempts":  intrusion_count,
+        # Distributions pour les charts
+        "by_status": dict(status_counts.most_common()),
+        "top_entities": dict(entity_counts.most_common(10)),
+        "top_rules": dict(rule_counts.most_common(10)),
+        "classifications": dict(classif_counts.most_common()),  # 14 
+        "daily_labels": sorted_days,
+        "daily_counts": [daily_counts[d] for d in sorted_days],
+        # Série temporelle par niveau de sévérité (pour le graphique multi-lignes)
+        "daily_by_severity": {
+            "Critical": [daily_crit.get(d, 0)   for d in sorted_days],
+            "High":     [daily_high.get(d, 0)    for d in sorted_days],
+            "Medium":   [daily_medium.get(d, 0)  for d in sorted_days],
+            "Low":      [daily_low.get(d, 0)      for d in sorted_days],
+        },
+        # Série temporelle par entité (top 5 — pour le stacked bar)
+        "daily_by_entity": {
+            entity: [entity_daily[entity].get(d, 0) for d in sorted_days]
+            for entity, _ in entity_counts.most_common(5)
+        },
+        # Tableau alertes critiques
+        "critical_list": critical_list,
+        # Cases
+        "total_cases": len(cases),
+        "cases_by_priority": dict(case_priority),
+        "cases_by_status": dict(case_status),
+        # Métadonnées
+        "date_from": date_from,
+        "date_to": date_to,
+        "last_updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }

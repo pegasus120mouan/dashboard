@@ -1,0 +1,368 @@
+{% extends "base.html" %}
+{% set active_tab = "dashboard" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block body %}
+<!-- ══ LOADER ═══════════════════════════════════════════════════════════════ -->
+<div id="loader" class="loader-overlay">
+  <div class="loader-box">
+    <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+    <p>Chargement des données LogRhythm…</p>
+  </div>
+</div>
+
+<!-- ══ MAIN ══════════════════════════════════════════════════════════════════ -->
+<main class="main" id="mainContent" style="display:none">
+  <div id="criticalBanner" class="critical-banner" style="display:none">
+    <i class="fa-solid fa-triangle-exclamation"></i>
+    <span id="criticalBannerText"></span>
+  </div>
+
+  <!-- ── KPI CARDS ───────────────────────────────────────────────────────── -->
+  <section class="kpi-section">
+    <div class="kpi-card kpi-blue kpi-clickable" data-severity="all" title="Voir toutes les alertes">
+      <p class="kpi-label">Total</p>
+      <p class="kpi-value" id="kpiTotal">—</p>
+      <p class="kpi-sub" id="kpiPeriod">—</p>
+    </div>
+
+    <div class="kpi-group">
+      <p class="kpi-group-label">Alertes normales</p>
+      <div class="kpi-group-total">
+          <p class="kpi-value" id="totalNormal">0</p>
+      </div>
+
+      <div class="kpi-group-cards">
+        <div class="kpi-card kpi-red kpi-clickable" data-severity="critical" title="Voir les alertes Critical">
+          <p class="kpi-label">Critical</p>
+          <p class="kpi-value" id="kpiCritical">—</p>
+          <p class="kpi-sub">RR ≥ 9</p>
+        </div>
+        <div class="kpi-card kpi-orange kpi-clickable" data-severity="high" title="Voir les alertes High">
+            <p class="kpi-label">High</p>
+            <p class="kpi-value" id="kpiHigh">—</p>
+            <p class="kpi-sub">RR 8</p>
+        </div>
+        <div class="kpi-card kpi-yellow kpi-clickable" data-severity="medium" title="Voir les alertes Medium">
+            <p class="kpi-label">Medium</p>
+            <p class="kpi-value" id="kpiMedium">—</p>
+            <p class="kpi-sub">RR 5–7</p>
+        </div>
+        <div class="kpi-card kpi-green kpi-clickable" data-severity="low" title="Voir les alertes Low">
+            <p class="kpi-label">Low</p>
+            <p class="kpi-value" id="kpiLow">—</p>
+            <p class="kpi-sub">RR 0–4</p>
+        </div>
+      </div>
+    </div>
+
+    <!--<div class="kpi-card kpi-purple kpi-clickable" data-severity="intrusion" title="Voir les tentatives d'intrusion">
+      <p class="kpi-label">Tentatives d'Intrusion</p>
+      <p class="kpi-value" id="kpiIntrusion">—</p>
+      <p class="kpi-sub">Compromise · Attack · DoS · Malware</p>
+    </div>-->
+    <div class="kpi-card kpi-purple kpi-clickable" data-severity="intrusion" title="Voir les tentatives d'intrusion">
+  <p class="kpi-label">Tentatives d'Intrusion et compromissions</p>
+  <p class="kpi-value" id="kpiIntrusion">—</p>
+  
+  
+  
+  <div class="kpi-sub-details" style="display: flex; gap: 10px; justify-content: center; margin-bottom: 10px; font-size: 11px;">
+      <span style="color:var(--red); font-weight:bold" id="int-crit">0 Critical</span>
+      <span style="color:var(--orange); font-weight:bold" id="int-high">0 High</span>
+      <span style="color:var(--yellow); font-weight:bold" id="int-medium">0 Medium</span>
+      <span style="color:var(--green); font-weight:bold" id="int-low">0 Low</span>
+  </div>
+  
+  <div class="kpi-details-mini">
+    <div class="kpi-details-horizontal">
+      <div class="detail-item-inline text-blue"><span>Config Modified</span><b id="v-det-config"> : 0</b></div>
+      <div class="detail-item-inline text-cyan"><span>Malware</span><b id="v-det-malware"> : 0</b></div>
+      <div class="detail-item-inline text-orange"><span>Brute Force</span><b id="v-det-brute"> : 0</b></div>
+      <div class="detail-item-inline text-red"><span>Web Attack</span><b id="v-det-web"> : 0</b></div>
+      <!--<div class="detail-item-inline text-muted" style="opacity: 0.7;"><span>Autres</span><b id="v-det-other"> : 0</b></div>-->
+    </div>
+  </div>
+</div>
+
+
+  </section>
+
+  <!-- ── CHARTS ROW 1 : Statuts + Évolution ─────────────────────────────── -->
+  <section class="charts-row">
+
+    <div class="chart-card chart-small">
+      <div class="card-header">
+        <i class="fa-solid fa-chart-pie"></i>
+        <h2>Distribution par statut</h2>
+      </div>
+      <div class="chart-container">
+        <canvas id="chartStatus"></canvas>
+      </div>
+      <div id="statusLegend" class="custom-legend"></div>
+    </div>
+
+    <div class="chart-card chart-large">
+      <div class="card-header">
+        <i class="fa-solid fa-chart-line"></i>
+        <h2>Évolution des alertes</h2>
+        <span class="card-badge" id="trendBadge"></span>
+      </div>
+      <div class="chart-container">
+        <canvas id="chartTrend"></canvas>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ── CHARTS ROW 2 : Entités + Types d'attaques ─────────────────────── 
+  <section class="charts-row charts-row-alt">
+
+    <div class="chart-card chart-large">
+      <div class="card-header">
+        <i class="fa-solid fa-building-shield"></i>
+        <h2>Top 10 — Entités touchées</h2>
+      </div>
+      <div class="chart-container chart-bar-container">
+        <canvas id="chartEntities"></canvas>
+      </div>
+    </div>
+
+   
+  </section>-->
+
+  <!-- ── CHARTS ROW 3 : Source + Types d'attaques ─────────────────────── -->
+  <!-- ── CHARTS ROW 3 : Source + Types d'attaques ─────────────────────── -->
+  <section class="charts-row charts-row-alt">  
+    <div class="chart-card">
+      <div class="chart-header">
+        <h3 class="chart-title">
+          <i class="fa-solid fa-bolt"></i> Top 10 sources d'attaque
+          <span id="timer-sources" class="loading-badge" style="display: none;">0s</span>
+        </h3>
+        <span class="chart-subtitle">Répartition par machine d'attaque</span>
+      </div>
+      <div class="chart-container" style="position: relative;">
+        <div id="loading-sources" class="chart-overlay" style="display: none;">
+          <div class="cyber-spinner"></div>
+          <span>Analyse LogRhythm...</span>
+        </div>
+        <canvas id="chartTopSourcesList"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-card chart-small">
+      <div class="card-header">
+        <i class="fa-solid fa-virus"></i>
+        <h2>Types d'attaques</h2>
+      </div>
+      <div class="chart-container">
+        <canvas id="chartAttackTypes"></canvas>
+      </div>
+      <div id="attackLegend" class="custom-legend"></div>
+    </div>
+  </section>
+  <!-- <section class="charts-row charts-row-alt">  
+    <div class="dashboard-grid">
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3 class="chart-title">
+            <i class="fa-solid fa-bolt"></i> Top 10 sources d'attaque
+            <span id="timer-sources" class="loading-badge" style="display: none;">0s</span>
+          </h3>
+          <span class="chart-subtitle">Répartition par machine d'attaque</span>
+        </div>
+        <div class="chart-container" style="position: relative;">
+          <div id="loading-sources" class="chart-overlay" style="display: none;">
+            <div class="cyber-spinner"></div>
+            <span>Analyse LogRhythm...</span>
+          </div>
+          <canvas id="chartTopSourcesList"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="chart-card chart-small">
+      <div class="card-header">
+        <i class="fa-solid fa-virus"></i>
+        <h2>Types d'attaques</h2>
+      </div>
+      <div class="chart-container">
+        <canvas id="chartAttackTypes"></canvas>
+      </div>
+      <div id="attackLegend" class="custom-legend"></div>
+    </div>
+  </section>-->
+  
+
+    <!-- ── CHARTS ROW 4 : Cible + Types d'intrusion ─────────────────────── -->
+  <section class="charts-row charts-row-alt">    
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3 class="chart-title">
+            <i class="fa-solid fa-building-shield"></i>
+            Top 10 hôtes impactés
+            <span id="timer-impacted" class="loading-badge" style="display: none;">0s</span>
+            
+          </h3>
+          <span class="chart-subtitle">Cibles principales des incidents</span>
+        </div>
+        <div class="chart-container" style="position: relative;">
+          <div id="loading-impacted" class="chart-overlay" style="display: none;">
+            <div class="cyber-spinner"></div>
+            <span>Extraction des cibles</span>
+          </div>
+          <canvas id="chartTopSources"></canvas>
+        </div>
+      </div>
+    
+      <div class="chart-card chart-small">
+        <div class="card-header">
+          <i class="fa-solid fa-fingerprint"></i>
+          <h2>Répartition des Intrusions</h2>
+        </div>
+        <div class="chart-container">
+          <canvas id="chartIntrusionDonut"></canvas>
+        </div>
+      </div>
+
+      
+  </section>
+
+  <!-- CHARTS ROW 5 : top 10 vulnerabilite-->
+  <section class="charts-row charts-row-alt">
+      <div class="chart-card">
+        <div class="chart-header">
+            <h3 class="chart-title">
+                <i class="fa-solid fa-shield-virus"></i>
+                Top 10 Typologie des Menaces
+                <span id="timer-vulns" class="loading-badge" style="display: none;">0s</span>
+            </h3>
+            <span class="chart-subtitle">Vecteurs d'attaque identifiés</span>
+        </div>
+        <div class="chart-container">
+            <canvas id="chartTopVulns"></canvas>
+        </div>
+      </div>
+  </section>
+
+  <!-- CHARTS ROW 6 : top 10 exploits-->
+  <section class="charts-row charts-row-alt">
+    <div class="chart-card">
+      <div class="chart-header">
+          <h3 class="chart-title">
+            <i class="fa-solid fa-bug"></i> 
+            Top 10 — Exploitations de Vulnérabilités (CVE)
+            <span id="timer-exploits" class="loading-badge" style="display: none;">0s</span>
+        </h3>
+          <span class="chart-subtitle">CVEs identifiées</span>
+      </div>
+      <div class="chart-container">
+          
+          <canvas id="chartTopExploits"></canvas>
+      </div>
+    </div>
+  </section>  
+
+  <!-- ── CASES ──────────────────────────────────────────────────────────── -->
+  <section class="charts-row">
+
+    <div class="chart-card chart-small">
+      <div class="card-header">
+        <i class="fa-solid fa-folder-open"></i>
+        <h2>Cases — Priorités</h2>
+        <span class="card-badge" id="totalCasesBadge"></span>
+      </div>
+      <div class="chart-container" style="position: relative;">
+        
+        <canvas id="chartCases"></canvas>
+        
+        <div id="chartCasesCenterText" style="position: absolute; top: 43%; left: 50%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; display: none;">
+          <span id="chartCenterRate" style="font-size: 24px; font-weight: bold; color: #fff; font-family: monospace;">0%</span>
+          <br>
+          <span style="font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; font-weight: bold;">Escalade</span>
+        </div>
+
+        <p id="chartCasesEmpty" style="display:none;color:var(--text-muted);text-align:center;padding:40px;margin:0">Aucun case sur la période</p>
+      </div>
+    </div>
+
+    <div class="chart-card chart-large" style="display: flex; flex-direction: column; justify-content: space-between;">
+      <div>
+        <div class="card-header">
+          <i class="fa-solid fa-list-check"></i>
+          <h2>Cases — Statuts</h2>
+          
+          <div class="header-badges" style="display: flex; gap: 8px; margin-left: auto;">
+            <span class="card-badge" id="backlogCasesBadge" style="background-color: #ef4444; color: #fff; font-weight: bold;">0 en attente</span>
+            <span class="card-badge" id="resolvedCasesBadge" style="background-color: #10b981; color: #fff; font-weight: bold;">0 traités</span>
+          </div>
+        </div>
+        
+        <div id="casesStatusTable" class="table-wrapper">
+          <table class="data-table">
+            <thead><tr><th>Statut</th><th>Nombre</th><th>Proportion</th></tr></thead>
+            <tbody id="casesStatusBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="casesQualificationMetrics" style="display: flex; justify-content: space-around; border-top: 1px solid #1e293b; padding: 12px 0 4px 0; margin-top: 10px; text-align: center;">
+         <div>
+            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Vrais Positifs (Pertinence)</div>
+            <div id="truePositiveRateValue" style="font-size: 18px; font-weight: bold; color: #38bdf8; font-family: monospace; margin-top: 2px;">0%</div>
+         </div>
+         <div style="border-left: 1px solid #1e293b;"></div>
+         <div>
+            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Faux Positifs (Bruit)</div>
+            <div id="falsePositiveRateValue" style="font-size: 18px; font-weight: bold; color: #f97316; font-family: monospace; margin-top: 2px;">0%</div>
+         </div>
+      </div>
+    </div>
+
+
+  </section>
+
+  <!-- ── TABLE : TOP 10 RÈGLES ──────────────────────────────────────────── -->
+  <section class="table-section">
+    <div class="card-header">
+      <i class="fa-solid fa-ranking-star"></i>
+      <h2>Top 10 — Règles les plus déclenchées</h2>
+    </div>
+    <div class="table-wrapper">
+      <table class="data-table">
+        <thead>
+          <tr><th>#</th><th>Règle AIE</th><th>Type d'attaque</th><th>Occurrences</th><th>Proportion</th></tr>
+        </thead>
+        <tbody id="topRulesBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── TABLE : ALERTES CRITIQUES & ÉLEVÉES ───────────────────────────── -->
+  <section class="table-section">
+    <div class="card-header">
+      <i class="fa-solid fa-triangle-exclamation" style="color:var(--red)"></i>
+      <h2>Alertes Critiques &amp; Élevées non traitées</h2>
+      <span class="card-badge badge-red" id="criticalCountBadge"></span>
+      <span class="card-badge badge-orange" id="highCountBadge" style="margin-left:4px"></span>
+    </div>
+    <div class="table-wrapper">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th><th>Règle AIE</th><th>Entité</th>
+            <th>Classification</th><th>Sévérité</th><th>Statut</th><th>Date</th>
+          </tr>
+        </thead>
+        <tbody id="criticalAlarmsBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/charts.js"></script>
+<script src="/static/js/main.js"></script>
+{% endblock %}

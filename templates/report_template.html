@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Rapport d'Incident SOC</title>
+    <style>
+        @page { size: A4; margin: 15mm; }
+        body { font-family: Arial, sans-serif; color: #1a202c; font-size: 12px; }
+        .header { border-bottom: 2px solid #2b6cb0; padding-bottom: 10px; margin-bottom: 20px; }
+        .title { font-size: 20px; font-weight: bold; color: #1a365d; }
+        .kpi-box { background: #f7fafc; border: 1px solid #e2e8f0; padding: 10px; margin-bottom: 10px; text-align: center; }
+        .kpi-value { font-size: 18px; font-weight: bold; color: #e53e3e; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; }
+        th { background-color: #edf2f7; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="title">Rapport de Sécurité SOC / SIEM</div>
+        <div>Généré le : {{ generated_at }} | Période : {{ period }}</div>
+    </div>
+
+    <h3>Synthèse des Alertes</h3>
+    <div class="kpi-box">
+        Total Alertes Critiques : <span class="kpi-value">{{ kpis.critical_alerts }}</span>
+    </div>
+
+    <h3>Top Sources d'Attaque</h3>
+    <table>
+        <thead>
+            <tr><th>IP Source</th><th>Pays</th><th>Nombre d'attaques</th></tr>
+        </thead>
+        <tbody>
+            {% for source in top_sources %}
+            <tr>
+                <td>{{ source.ip }}</td>
+                <td>{{ source.country }}</td>
+                <td>{{ source.count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>
