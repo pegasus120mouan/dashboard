@@ -250,10 +250,17 @@ def api_full_forensic():
         data = _compute(*_range_from_days(nb_days))
     
     full_list = data.get("alarm_list", [])
-    relevant_alarms = [
+    priority = [
         a for a in full_list
         if a.get("isIntrusion") or a.get("severityLabel") in ["critical", "high"]
-    ][:40]
+    ]
+    # En prod SIR, beaucoup d'alertes sont medium/config : sans elles les Top 10 restent vides.
+    if len(priority) < 15:
+        seen = {a.get("alarmId") for a in priority}
+        rest = [a for a in full_list if a.get("alarmId") not in seen]
+        relevant_alarms = (priority + rest)[:40]
+    else:
+        relevant_alarms = priority[:40]
     enriched_data = get_full_forensic_data(relevant_alarms)
 
     return jsonify({

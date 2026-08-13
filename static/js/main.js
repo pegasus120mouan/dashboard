@@ -97,6 +97,7 @@ function _loadPageData(days, dateFrom, dateTo, force = false) {
       const mainContent = document.getElementById("mainContent");
       if (mainContent) mainContent.style.display = "flex";
       showLoader(false);
+      renderForensicCharts([]);
     })
     .finally(() => {
       stopTimer("timer-sources", timers.s);

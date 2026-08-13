@@ -184,93 +184,122 @@ def fetch_case_by_id(case_id: str) -> dict:
     return data
 
 #-----------------------------------
-import json
-import os
-import time
+import threading
 from concurrent.futures import ThreadPoolExecutor
-from collections import Counter
+
+_EMPTY_FORENSIC = {"-", "N/A", "n/a", "none", "None", ""}
+_drilldown_lock = threading.Lock()
+_drilldown_consecutive_fails = 0
+_DRILLDOWN_GIVE_UP = 4
+
+
+def _clean_val(value, default="N/A"):
+    if value is None:
+        return default
+    text = str(value).strip()
+    return default if text in _EMPTY_FORENSIC else text
+
+
+def _forensic_from_alarm(alarm):
+    """Champs forensic à partir de la liste d'alarmes (sans /events)."""
+    return {
+        "id": str(alarm.get("alarmId") or ""),
+        "type": _clean_val(
+            alarm.get("alarmRuleName") or alarm.get("classification") or alarm.get("alarmName"),
+            "Inconnu",
+        ),
+        "source": _clean_val(alarm.get("entityName")),
+        "impacted": _clean_val(
+            alarm.get("hostImpacted")
+            or alarm.get("impactedHostName")
+            or alarm.get("entityName")
+        ),
+        "cve": _clean_val(alarm.get("cve"), ""),
+        "severity": alarm.get("severityLabel"),
+    }
 
 
 def get_full_forensic_data(alarm_list):
     """
     Analyse profonde de chaque alarme pour extraire les artefacts.
+    Si /events est indisponible (prod publique), on retombe sur les champs alarme.
     """
-    # Si la liste est vide au départ, on s'arrête tout de suite
     if not alarm_list:
         return []
 
     def process_alarm(alarm):
-        alarm_id = str(alarm.get('alarmId'))
+        global _drilldown_consecutive_fails
+        alarm_id = str(alarm.get("alarmId") or "")
+        fallback = _forensic_from_alarm(alarm)
 
-        # --- STRATÉGIE CACHE ---
         if alarm_id in FORENSIC_CACHE:
             return FORENSIC_CACHE[alarm_id]
 
+        with _drilldown_lock:
+            skip_events = _drilldown_consecutive_fails >= _DRILLDOWN_GIVE_UP
+
+        if skip_events:
+            FORENSIC_CACHE[alarm_id] = fallback
+            return fallback
+
         try:
-            # Ton code de drilldown existant
-            details = fetch_drilldown(alarm_id) 
-            if not details:
-                return None
+            details = fetch_drilldown(alarm_id)
+            events_list = (details or {}).get("alarmEventsDetails") or []
+            if not details or not events_list:
+                with _drilldown_lock:
+                    _drilldown_consecutive_fails += 1
+                FORENSIC_CACHE[alarm_id] = fallback
+                return fallback
 
-            #event = details.get("alarmEventsDetails", [{}])[0]
-            # --- SÉCURITÉ ICI ---
-            events_list = details.get("alarmEventsDetails", [])
-            if not events_list:
-                return None
-            
-            event = events_list[0]
-            # --------------------
-            
-            # --- LOGIQUE HYBRIDE ---
+            with _drilldown_lock:
+                _drilldown_consecutive_fails = 0
+
+            event = events_list[0] if isinstance(events_list[0], dict) else {}
+
             source = "N/A"
-            if details.get("sourceHosts"): source = details["sourceHosts"][0]
-            elif details.get("sourceIps"): source = details["sourceIps"][0]
-            else: source = event.get('sourceHostName') or event.get('sourceIP') or "N/A"
+            if details.get("sourceHosts"):
+                source = details["sourceHosts"][0]
+            elif details.get("sourceIps"):
+                source = details["sourceIps"][0]
+            else:
+                source = event.get("sourceHostName") or event.get("sourceIP") or fallback["source"]
 
-            #impacted = "N/A"
-            #if details.get("destHosts"):   impacted = details["destHosts"][0]
-            #elif details.get("destIps"):   impacted = details["destIps"][0]
-            #else: impacted = event.get('destinationHostName') or event.get('destinationIP') or "N/A"
-
-            # --- NOUVELLE LOGIQUE RECHERCHE AVEC FALLBACK ALARME ---
-            impacted = "N/A"
-            if details.get("destHosts"):   
+            if details.get("destHosts"):
                 impacted = details["destHosts"][0]
-            elif details.get("destIps"):   
+            elif details.get("destIps"):
                 impacted = details["destIps"][0]
-            else: 
-                # On cherche d'abord dans l'événement, ET SI C'EST VIDE, dans l'objet alarme brute
+            else:
                 impacted = (
-                    event.get('destinationHostName') 
-                    or event.get('destinationIP') 
-                    or alarm.get('impactedHostName')
-                    or alarm.get('entityName')
-                    or alarm.get('hostImpacted')
-                    or alarm.get('commonEventHost')
-                    or "N/A"
+                    event.get("destinationHostName")
+                    or event.get("destinationIP")
+                    or fallback["impacted"]
                 )
 
+            cve_event = event.get("cve") or ""
+            cve_alarm = alarm.get("cve") or ""
             result = {
                 "id": alarm_id,
-                "type": event.get('commonEventName') or alarm.get('alarmName') or "Inconnu",
-                "source": source,
-                "impacted": impacted,
-                "cve": event.get('cve', "").strip() or alarm.get('cve', "").strip(),
-                "severity": alarm.get('severityLabel')
+                "type": _clean_val(
+                    event.get("commonEventName") or fallback["type"],
+                    "Inconnu",
+                ),
+                "source": _clean_val(source, fallback["source"]),
+                "impacted": _clean_val(impacted, fallback["impacted"]),
+                "cve": (cve_event.strip() if isinstance(cve_event, str) else "")
+                or (cve_alarm.strip() if isinstance(cve_alarm, str) else ""),
+                "severity": alarm.get("severityLabel"),
             }
-
-            # ON ENREGISTRE DANS LE CACHE POUR LA PROCHAINE FOIS
             FORENSIC_CACHE[alarm_id] = result
-            
             return result
 
         except Exception as e:
             print(f"Erreur sur alarme {alarm_id}: {e}")
-            return None
+            with _drilldown_lock:
+                _drilldown_consecutive_fails += 1
+            FORENSIC_CACHE[alarm_id] = fallback
+            return fallback
 
-    # --- PARTIE MANQUANTE QUI CAUSAIT LE 'NULL' ---
-    # On exécute process_alarm pour chaque alarme de la liste en parallèle
     with ThreadPoolExecutor(max_workers=12) as executor:
         results = list(executor.map(process_alarm, alarm_list))
-    
+
     return [r for r in results if r is not None]

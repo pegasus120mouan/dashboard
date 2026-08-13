@@ -60,10 +60,9 @@ MONITORED_ENTITIES: set = {
     "Linux server",
     "SW_Access AIR-CI",
     "WIFI Controleur AIR-CI",
-    
+    "SIR CONTROLEURS",
+    "SIR",
 }
-#SIR CONTROLEURS",
-#    "SIR",
 
 # Mots-clés cherchés dans alarmRuleName (lowercase) pour détecter une tentative d'intrusion
 INTRUSION_KEYWORDS = [
