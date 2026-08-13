@@ -397,10 +397,19 @@ def download_pdf_report():
     top_rules_raw = metrics.get("top_rules", {})
     top_rules = [{"name": name, "count": count} for name, count in top_rules_raw.items()]
 
+    def _fmt_day(iso_str: str) -> str:
+        try:
+            return datetime.strptime(str(iso_str)[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
+        except Exception:
+            return str(iso_str)[:10]
+
     report_context = {
         "generated_at": datetime.now().strftime("%d/%m/%Y à %H:%M"),
+        "generated_by": getattr(current_user, "username", "") or "",
         "date_from": date_from,
         "date_to": date_to,
+        "period_from": _fmt_day(date_from),
+        "period_to": _fmt_day(date_to),
         "total_alarms": metrics.get("total_alarms", 0),
         "sev_critical": metrics.get("severity_critical", 0),
         "sev_high":     metrics.get("severity_high", 0),

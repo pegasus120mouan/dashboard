@@ -2,282 +2,526 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Rapport de Sécurité SOC LogRhythm</title>
+    <title>Rapport d'activité</title>
     <style>
-        /* CONFIGURATION DE LA PAGE & PAGINATION WEASYPRINT */
-        @page { 
-            size: A4; 
-            margin: 20mm 15mm 20mm 15mm; 
-            
-            /* En-tête discret répété sur toutes les pages */
-            @top-right {
-                content: "SirDashboard — Rapport SOC";
-                font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
+        @page {
+            size: A4;
+            margin: 18mm 16mm 18mm 16mm;
+
+            @top-left {
+                content: "Rapport d'activité";
+                font-family: "Liberation Sans", "DejaVu Sans", "Segoe UI", Helvetica, Arial, sans-serif;
                 font-size: 8px;
-                color: #94a3b8;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                color: #8a97a6;
             }
 
-            /* Pied de page avec numérotation automatique */
-            @bottom-left {
-                content: "Confidentiel — Usage interne uniquement";
-                font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
+            @top-right {
+                content: "Confidentiel — usage interne";
+                font-family: "Liberation Sans", "DejaVu Sans", "Segoe UI", Helvetica, Arial, sans-serif;
                 font-size: 8px;
-                color: #94a3b8;
+                color: #8a97a6;
+            }
+
+            @bottom-left {
+                content: "SOC · LogRhythm";
+                font-family: "Liberation Sans", "DejaVu Sans", "Segoe UI", Helvetica, Arial, sans-serif;
+                font-size: 8px;
+                color: #8a97a6;
             }
 
             @bottom-right {
                 content: "Page " counter(page) " / " counter(pages);
-                font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
+                font-family: "Liberation Sans", "DejaVu Sans", "Segoe UI", Helvetica, Arial, sans-serif;
                 font-size: 8px;
-                font-weight: bold;
-                color: #64748b;
+                font-weight: 700;
+                color: #3d4f63;
             }
         }
 
-        body { font-family: 'Segoe UI', Helvetica, Arial, sans-serif; color: #1e293b; font-size: 11px; }
-        
-        .header { border-bottom: 2px solid #0284c7; padding-bottom: 10px; margin-bottom: 20px; }
-        .title { font-size: 20px; font-weight: bold; color: #0f172a; }
-        .subtitle { font-size: 11px; color: #64748b; }
-        
-        /* Grilles pour les cartes KPI */
-        .kpi-table { width: 100%; border-collapse: separate; border-spacing: 8px; margin-bottom: 15px; border: none; }
-        .kpi-table td { border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 4px; padding: 10px; text-align: center; width: 25%; }
-        
-        .kpi-val { font-size: 18px; font-weight: bold; margin-top: 4px; }
-        .red { color: #dc2626; }
-        .orange { color: #ea580c; }
-        .yellow { color: #d97706; }
-        .green { color: #16a34a; }
-        .blue { color: #0284c7; }
+        * { box-sizing: border-box; }
 
-        .details-list { font-size: 9px; color: #475569; margin-top: 6px; text-align: left; }
-        .details-list div { display: flex; justify-content: space-between; border-bottom: 1px dashed #cbd5e1; padding: 2px 0; }
-
-        /* Style des tableaux de données */
-        table.data-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10px; }
-        table.data-table th, table.data-table td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; }
-        table.data-table th { background-color: #f1f5f9; font-weight: bold; color: #0f172a; }
-        table.data-table tr:nth-child(even) { background-color: #f8fafc; }
-        
-        /* Éviter de couper les lignes de tableau au milieu d'un saut de page */
-        tr { page-break-inside: avoid; }
-        h3 { page-break-after: avoid; margin-top: 20px; }
-
-        .badge { padding: 2px 6px; border-radius: 3px; font-weight: bold; font-size: 9px; display: inline-block; }
-        .badge-critical { background-color: #fecaca; color: #991b1b; }
-        .badge-high { background-color: #ffedd5; color: #9a3412; }
-    
-
-        .summary-container {
-            margin-top: 35px;
-            page-break-inside: avoid;
-        }
-        .summary-card {
-            background-color: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-left: 4px solid #0284c7;
-            padding: 14px 18px;
-            border-radius: 4px;
-            margin-top: 10px;
-        }
-        .summary-title {
-            font-size: 13px;
-            font-weight: bold;
-            color: #0f172a;
-            margin-bottom: 12px;
-        }
-        .summary-item {
-            margin-bottom: 10px;
-            line-height: 1.5;
+        body {
+            font-family: "Liberation Sans", "DejaVu Sans", "Segoe UI", Helvetica, Arial, sans-serif;
+            color: #1a2332;
             font-size: 10.5px;
-            color: #334155;
+            line-height: 1.45;
         }
-        .summary-item:last-child {
-            margin-bottom: 0;
+
+        .masthead {
+            border-bottom: 2px solid #0f2744;
+            padding-bottom: 14px;
+            margin-bottom: 22px;
         }
-        .summary-label {
-            font-weight: bold;
-            color: #0284c7;
+
+        .kicker {
+            font-size: 8px;
+            font-weight: 700;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: #5c6b7a;
+            margin-bottom: 6px;
+        }
+
+        .title {
+            font-size: 26px;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            color: #0f2744;
+            line-height: 1.15;
+        }
+
+        .meta {
+            margin-top: 10px;
+            display: table;
+            width: 100%;
+        }
+
+        .meta-row { display: table-row; }
+
+        .meta-cell {
+            display: table-cell;
+            width: 33.33%;
+            padding-right: 12px;
+            vertical-align: top;
+        }
+
+        .meta-label {
             display: block;
+            font-size: 8px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: #8a97a6;
             margin-bottom: 2px;
         }
 
+        .meta-value {
+            font-size: 11px;
+            font-weight: 600;
+            color: #1a2332;
+        }
+
+        .section {
+            margin-top: 22px;
+            page-break-inside: avoid;
+        }
+
+        .section-head {
+            margin: 0 0 10px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #d8dee6;
+        }
+
+        .section-num {
+            display: inline-block;
+            font-size: 8px;
+            font-weight: 700;
+            letter-spacing: 0.14em;
+            color: #ffffff;
+            background: #0f2744;
+            padding: 2px 6px;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        h2 {
+            display: inline;
+            font-size: 12.5px;
+            font-weight: 700;
+            color: #0f2744;
+            letter-spacing: 0.01em;
+            vertical-align: middle;
+        }
+
+        .kpi-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 8px 0;
+            margin: 0 0 4px;
+        }
+
+        .kpi-table td {
+            width: 25%;
+            background: #ffffff;
+            border: 1px solid #d8dee6;
+            border-top: 3px solid #1e4a7a;
+            padding: 12px 10px 11px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        .kpi-table td.accent-red { border-top-color: #b42318; }
+        .kpi-table td.accent-orange { border-top-color: #c2410c; }
+        .kpi-table td.accent-green { border-top-color: #17663a; }
+        .kpi-table td.accent-navy { border-top-color: #0f2744; }
+
+        .kpi-lbl {
+            display: block;
+            font-size: 8px;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: #5c6b7a;
+        }
+
+        .kpi-val {
+            margin-top: 4px;
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.04em;
+            line-height: 1.1;
+            color: #0f2744;
+        }
+
+        .kpi-val.red { color: #b42318; }
+        .kpi-val.orange { color: #c2410c; }
+        .kpi-val.green { color: #17663a; }
+
+        .kpi-note {
+            margin-top: 6px;
+            font-size: 8.5px;
+            color: #5c6b7a;
+            line-height: 1.4;
+        }
+
+        .split-table { width: 100%; border-collapse: separate; border-spacing: 8px 0; }
+        .split-table td {
+            background: #ffffff;
+            border: 1px solid #d8dee6;
+            border-top: 3px solid #0f2744;
+            padding: 12px 12px 10px;
+            vertical-align: top;
+        }
+
+        .threat-row {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+            font-size: 10px;
+        }
+
+        .threat-row td {
+            border: none;
+            border-bottom: 1px solid #e6ebf0;
+            padding: 5px 0;
+            background: transparent;
+        }
+
+        .threat-row td:last-child {
+            text-align: right;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            width: 48px;
+        }
+
+        table.data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 4px;
+            font-size: 9.5px;
+        }
+
+        table.data-table th {
+            background: #0f2744;
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 8px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            padding: 7px 8px;
+            text-align: left;
+            border: none;
+        }
+
+        table.data-table td {
+            border-bottom: 1px solid #e6ebf0;
+            padding: 6px 8px;
+            text-align: left;
+            color: #1a2332;
+        }
+
+        table.data-table tr:nth-child(even) td { background: #f6f8fa; }
+        table.data-table tbody tr { page-break-inside: avoid; }
+
+        .rank {
+            font-weight: 700;
+            color: #5c6b7a;
+            width: 28px;
+        }
+
+        .count {
+            font-weight: 700;
+            text-align: right !important;
+            font-variant-numeric: tabular-nums;
+            width: 90px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 7px;
+            font-size: 8px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .badge-critical { background: #f8d7d4; color: #8a1c14; }
+        .badge-high { background: #fde6d8; color: #9a3412; }
+
+        .empty {
+            text-align: center;
+            color: #5c6b7a;
+            font-style: italic;
+        }
+
+        .summary {
+            margin-top: 26px;
+            page-break-inside: avoid;
+        }
+
+        .summary-card {
+            background: #f6f8fa;
+            border: 1px solid #d8dee6;
+            border-left: 3px solid #0f2744;
+            padding: 14px 16px 10px;
+        }
+
+        .summary-item { margin-bottom: 11px; }
+        .summary-item:last-child { margin-bottom: 0; }
+
+        .summary-label {
+            display: block;
+            font-size: 8px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: #0f2744;
+            margin-bottom: 3px;
+        }
+
+        .summary-text {
+            font-size: 10px;
+            color: #3d4f63;
+            line-height: 1.5;
+        }
     </style>
 </head>
 <body>
 
-    <!-- EN-TÊTE PRINCIPAL -->
-    <div class="header">
-        <div class="title">SirDashboard — Rapport d'Activité LogRhythm</div>
-        <div class="subtitle">Généré le : {{ data.generated_at }} | Période : du {{ data.date_from[:10] }} au {{ data.date_to[:10] }}</div>
-    </div>
-
-    <!-- SECTION 1 : SYNTHÈSE DES ALERTES NORMALES -->
-    <h3>1. Synthèse des Événements &amp; Alertes Normales</h3>
-    <table class="kpi-table">
-        <tr>
-            <td>
-                <span class="subtitle">Total Alertes</span>
-                <div class="kpi-val blue">{{ data.total_alarms }}</div>
-            </td>
-            <td>
-                <span class="subtitle">Critical (RR ≥ 9)</span>
-                <div class="kpi-val red">{{ data.sev_critical }}</div>
-            </td>
-            <td>
-                <span class="subtitle">High (RR 8)</span>
-                <div class="kpi-val orange">{{ data.sev_high }}</div>
-            </td>
-            <td>
-                <span class="subtitle">Medium / Low</span>
-                <div class="kpi-val blue">{{ data.sev_medium + data.sev_low }}</div>
-                <div class="details-list">
-                    <div><span>Medium (RR 5-7):</span> <b>{{ data.sev_medium }}</b></div>
-                    <div><span>Low (RR 0-4):</span> <b>{{ data.sev_low }}</b></div>
+    <header class="masthead">
+        <div class="kicker">Centre opérationnel de sécurité</div>
+        <div class="title">Rapport d'activité</div>
+        <div class="meta">
+            <div class="meta-row">
+                <div class="meta-cell">
+                    <span class="meta-label">Période</span>
+                    <span class="meta-value">{{ data.period_from }} — {{ data.period_to }}</span>
                 </div>
-            </td>
-        </tr>
-    </table>
-
-    <!-- SECTION 2 : SYNTHÈSE DES INTRUSIONS -->
-    <h3>2. Tentatives d'Intrusion &amp; Compromissions</h3>
-    <table class="kpi-table">
-        <tr>
-            <td style="width: 30%;">
-                <span class="subtitle">Total Intrusions</span>
-                <div class="kpi-val red">{{ data.intrusion_attempts }}</div>
-                <div class="details-list">
-                    <div><span>Niveau Critical:</span> <b class="red">{{ data.int_crit }}</b></div>
-                    <div><span>Niveau High:</span> <b class="orange">{{ data.int_high }}</b></div>
+                <div class="meta-cell">
+                    <span class="meta-label">Généré le</span>
+                    <span class="meta-value">{{ data.generated_at }}</span>
                 </div>
-            </td>
-            <td style="width: 70%;" colspan="3">
-                <span class="subtitle">Répartition par Type de Menace</span>
-                <div class="details-list" style="margin-top: 10px; font-size: 10px;">
-                    <div><span>Configuration Modifiée :</span> <b>{{ data.intrusion_details.get('config_mod', 0) }}</b></div>
-                    <div><span>Malwares &amp; Ransomwares :</span> <b>{{ data.intrusion_details.get('malware', 0) }}</b></div>
-                    <div><span>Attaques Brute Force :</span> <b>{{ data.intrusion_details.get('brute_force', 0) }}</b></div>
-                    <div><span>Attaques Web / Injection :</span> <b>{{ data.intrusion_details.get('web_attack', 0) }}</b></div>
+                <div class="meta-cell">
+                    <span class="meta-label">Émis par</span>
+                    <span class="meta-value">{{ data.generated_by or "SOC" }}</span>
                 </div>
-            </td>
-        </tr>
-    </table>
-
-    <!-- SECTION 3 : QUALITÉ & DOSSIERS (CASES) -->
-    <h3>3. Qualification &amp; Dossiers SOC (Cases)</h3>
-    <table class="kpi-table">
-        <tr>
-            <td>
-                <span class="subtitle">Total Cases Période</span>
-                <div class="kpi-val blue">{{ data.total_cases }}</div>
-            </td>
-            <td>
-                <span class="subtitle">Cases Traités</span>
-                <div class="kpi-val green">{{ data.resolved_cases }}</div>
-            </td>
-            <td>
-                <span class="subtitle">Vrais Positifs (Pertinence)</span>
-                <div class="kpi-val blue">{{ data.true_positive_rate }}%</div>
-            </td>
-            <td>
-                <span class="subtitle">Faux Positifs (Bruit)</span>
-                <div class="kpi-val orange">{{ data.false_positive_rate }}%</div>
-            </td>
-        </tr>
-    </table>
-
-    <!-- SECTION 4 : TOP RÈGLES -->
-    {% if data.top_rules %}
-    <h3>4. Top 10 — Règles AIE les plus déclenchées</h3>
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th>#</th>
-                <th>Règle AIE</th>
-                <th>Nombre d'occurrences</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for rule in data.top_rules %}
-            <tr>
-                <td style="width: 5%;">{{ loop.index }}</td>
-                <td>{{ rule.name }}</td>
-                <td style="width: 25%;"><b>{{ rule.count }}</b></td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% endif %}
-
-    <!-- SECTION 5 : ALERTES CRITIQUES -->
-    <h3>5. Alertes Critiques &amp; Élevées du Backlog</h3>
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Règle AIE</th>
-                <th>Entité / Hôte</th>
-                <th>Classification</th>
-                <th>Sévérité</th>
-                <th>Date</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for alarm in data.critical_list %}
-            <tr>
-                <td>{{ alarm.alarmId }}</td>
-                <td>{{ alarm.alarmRuleName }}</td>
-                <td>{{ alarm.hostImpacted or alarm.entityName or 'N/A' }}</td>
-                <td>{{ alarm.classification or 'N/A' }}</td>
-                <td>
-                    {% if alarm.severityLabel == 'critical' %}
-                        <span class="badge badge-critical">CRITICAL</span>
-                    {% else %}
-                        <span class="badge badge-high">HIGH</span>
-                    {% endif %}
-                </td>
-                <td>{{ alarm.dateInserted[:19] if alarm.dateInserted else 'N/A' }}</td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="6" style="text-align: center;">Aucune alerte critique ou élevée dans le backlog sur la période.</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-
-    </table>
-
-    <!-- SECTION RESUME DU PDF APRES LE DERNIER TABLEAU -->
-    <div class="summary-container">
-        <div class="summary-title">📈 Synthèse Analytique des Menaces &amp; Tendances</div>
-        
-        <div class="summary-card">
-            <div class="summary-item">
-                <span class="summary-label">Évolution Temporelle :</span>
-                {{ data.summaries.evolution }}
-            </div>
-            
-            <div class="summary-item">
-                <span class="summary-label">Top Sources d'Attaque &amp; Hôtes Impactés :</span>
-                {{ data.summaries.forensic }}
-            </div>
-
-            <div class="summary-item">
-                <span class="summary-label">Répartition des Intrusions &amp; Typologies :</span>
-                {{ data.summaries.intrusions }}
-            </div>
-
-            <div class="summary-item">
-                <span class="summary-label">Exploitations &amp; Vulnérabilités (CVE) :</span>
-                {{ data.summaries.cve }}
-            </div>
-
-            <div class="summary-item">
-                <span class="summary-label">Statuts &amp; Qualification SOC :</span>
-                {{ data.summaries.status }}
             </div>
         </div>
-    </div>
+    </header>
+
+    <section class="section">
+        <div class="section-head">
+            <span class="section-num">01</span>
+            <h2>Synthèse des événements et alertes</h2>
+        </div>
+        <table class="kpi-table">
+            <tr>
+                <td class="accent-navy">
+                    <span class="kpi-lbl">Total alertes</span>
+                    <div class="kpi-val">{{ data.total_alarms }}</div>
+                </td>
+                <td class="accent-red">
+                    <span class="kpi-lbl">Critical (RR ≥ 9)</span>
+                    <div class="kpi-val red">{{ data.sev_critical }}</div>
+                </td>
+                <td class="accent-orange">
+                    <span class="kpi-lbl">High (RR 8)</span>
+                    <div class="kpi-val orange">{{ data.sev_high }}</div>
+                </td>
+                <td>
+                    <span class="kpi-lbl">Medium / Low</span>
+                    <div class="kpi-val">{{ data.sev_medium + data.sev_low }}</div>
+                    <div class="kpi-note">Medium {{ data.sev_medium }} · Low {{ data.sev_low }}</div>
+                </td>
+            </tr>
+        </table>
+    </section>
+
+    <section class="section">
+        <div class="section-head">
+            <span class="section-num">02</span>
+            <h2>Tentatives d'intrusion et compromissions</h2>
+        </div>
+        <table class="split-table">
+            <tr>
+                <td style="width: 32%;" class="accent-red">
+                    <span class="kpi-lbl">Total intrusions</span>
+                    <div class="kpi-val red">{{ data.intrusion_attempts }}</div>
+                    <div class="kpi-note">
+                        Critical {{ data.int_crit }}<br>
+                        High {{ data.int_high }}
+                    </div>
+                </td>
+                <td style="width: 68%;">
+                    <span class="kpi-lbl">Répartition par type de menace</span>
+                    <table class="threat-row">
+                        <tr>
+                            <td>Configuration modifiée</td>
+                            <td>{{ data.intrusion_details.get('config_mod', 0) }}</td>
+                        </tr>
+                        <tr>
+                            <td>Malwares et ransomwares</td>
+                            <td>{{ data.intrusion_details.get('malware', 0) }}</td>
+                        </tr>
+                        <tr>
+                            <td>Attaques brute force</td>
+                            <td>{{ data.intrusion_details.get('brute_force', 0) }}</td>
+                        </tr>
+                        <tr>
+                            <td>Attaques web / injection</td>
+                            <td>{{ data.intrusion_details.get('web_attack', 0) }}</td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+    </section>
+
+    <section class="section">
+        <div class="section-head">
+            <span class="section-num">03</span>
+            <h2>Qualification et dossiers SOC</h2>
+        </div>
+        <table class="kpi-table">
+            <tr>
+                <td>
+                    <span class="kpi-lbl">Cases sur la période</span>
+                    <div class="kpi-val">{{ data.total_cases }}</div>
+                </td>
+                <td class="accent-green">
+                    <span class="kpi-lbl">Cases traités</span>
+                    <div class="kpi-val green">{{ data.resolved_cases }}</div>
+                </td>
+                <td>
+                    <span class="kpi-lbl">Vrais positifs</span>
+                    <div class="kpi-val">{{ data.true_positive_rate }}%</div>
+                </td>
+                <td class="accent-orange">
+                    <span class="kpi-lbl">Faux positifs</span>
+                    <div class="kpi-val orange">{{ data.false_positive_rate }}%</div>
+                </td>
+            </tr>
+        </table>
+    </section>
+
+    {% if data.top_rules %}
+    <section class="section">
+        <div class="section-head">
+            <span class="section-num">04</span>
+            <h2>Règles AIE les plus déclenchées</h2>
+        </div>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Règle AIE</th>
+                    <th style="text-align: right;">Occurrences</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rule in data.top_rules %}
+                <tr>
+                    <td class="rank">{{ loop.index }}</td>
+                    <td>{{ rule.name }}</td>
+                    <td class="count">{{ rule.count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    {% endif %}
+
+    <section class="section">
+        <div class="section-head">
+            <span class="section-num">05</span>
+            <h2>Backlog critique et élevé</h2>
+        </div>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Règle AIE</th>
+                    <th>Entité / hôte</th>
+                    <th>Classification</th>
+                    <th>Sévérité</th>
+                    <th>Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for alarm in data.critical_list %}
+                <tr>
+                    <td>{{ alarm.alarmId }}</td>
+                    <td>{{ alarm.alarmRuleName }}</td>
+                    <td>{{ alarm.hostImpacted or alarm.entityName or "N/A" }}</td>
+                    <td>{{ alarm.classification or "N/A" }}</td>
+                    <td>
+                        {% if alarm.severityLabel == "critical" %}
+                            <span class="badge badge-critical">Critical</span>
+                        {% else %}
+                            <span class="badge badge-high">High</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ alarm.dateInserted[:19] if alarm.dateInserted else "N/A" }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="empty">Aucune alerte critique ou élevée dans le backlog sur la période.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+
+    <section class="summary">
+        <div class="section-head">
+            <span class="section-num">06</span>
+            <h2>Synthèse analytique</h2>
+        </div>
+        <div class="summary-card">
+            <div class="summary-item">
+                <span class="summary-label">Évolution temporelle</span>
+                <div class="summary-text">{{ data.summaries.evolution }}</div>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">Sources d'attaque et hôtes impactés</span>
+                <div class="summary-text">{{ data.summaries.forensic }}</div>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">Intrusions et typologies</span>
+                <div class="summary-text">{{ data.summaries.intrusions }}</div>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">Exploitations et vulnérabilités</span>
+                <div class="summary-text">{{ data.summaries.cve }}</div>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">Qualification SOC</span>
+                <div class="summary-text">{{ data.summaries.status }}</div>
+            </div>
+        </div>
+    </section>
+
 </body>
 </html>
